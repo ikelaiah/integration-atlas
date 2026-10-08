@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "integration-atlas"
-version = "0.1.1"
+version = "0.2.0"
 description = "Map the systems, scripts, databases, files and APIs hidden inside your integration estate — then see what could break when something changes."
 readme = "README.md"
 license = { text = "Apache-2.0" }

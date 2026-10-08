@@ -10,6 +10,7 @@ import { AtlasPage } from "@/features/atlas/AtlasPage";
 import { EntityListPage } from "@/features/entities/EntityListPage";
 import { RisksPage } from "@/features/risks/RisksPage";
 import { ScansPage } from "@/features/scans/ScansPage";
+import { ReviewPage } from "@/features/review/ReviewPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -222,10 +223,14 @@ export default function App() {
                 element={
                   <ScansPage
                     workspaceId={workspaceId}
-                    onScanComplete={() => window.location.reload()}
+                    onScanComplete={() => {
+                      bootstrap();
+                      if (workspaceId) api.risks(workspaceId).then((result) => setRisks(result.findings));
+                    }}
                   />
                 }
               />
+              <Route path="/review" element={<ReviewPage workspaceId={workspaceId} />} />
               <Route
                 path="/settings"
                 element={

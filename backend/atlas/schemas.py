@@ -352,6 +352,11 @@ class ScanProgress(BaseModel):
     events: list[str] = Field(default_factory=list)
 
 
+class ScanPreview(BaseModel):
+    scanner_summary: dict[str, Any]
+    diff_summary: dict[str, Any]
+
+
 # --------------------------------------------------------------------------- #
 # Export
 # --------------------------------------------------------------------------- #

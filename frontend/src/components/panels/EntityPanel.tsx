@@ -8,11 +8,12 @@ import {
   FileCode2,
   GitBranch,
   Lock,
+  Pencil,
   Radar,
   X,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import type { EntityDetail, RelationshipDetail, Severity } from "@/lib/types";
+import type { EntityDetail, Environment, RelationshipDetail, Severity } from "@/lib/types";
 import {
   CONFIDENCE_META,
   entityVisual,
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { DetailRow } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input, Label, Textarea } from "@/components/ui/input";
 import { UnderlineTabs } from "@/components/ui/tabs";
 import { Separator, Skeleton, EmptyState } from "@/components/ui/misc";
 
@@ -45,6 +47,7 @@ export interface EntityPanelProps {
   onSelectEntity: (id: string) => void;
   onImpact: (id: string, direction: "downstream" | "upstream") => void;
   onFocus: (id: string) => void;
+  onUpdated: () => void;
   className?: string;
 }
 
@@ -55,6 +58,7 @@ export function EntityPanel({
   onSelectEntity,
   onImpact,
   onFocus,
+  onUpdated,
   className,
 }: EntityPanelProps) {
   const [tab, setTab] = useState<Tab>("overview");
@@ -62,6 +66,9 @@ export function EntityPanel({
   const [relationships, setRelationships] = useState<RelationshipDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState({ description: "", owner: "", environment: "unknown" as Environment, location: "", technology: "" });
 
   useEffect(() => {
     if (!entityId) return;
@@ -69,10 +76,12 @@ export function EntityPanel({
     setLoading(true);
     setError(null);
     setTab("overview");
+    setEditing(false);
     Promise.all([api.entity(entityId), api.entityRelationships(entityId)])
       .then(([detail, rels]) => {
         if (cancelled) return;
         setEntity(detail);
+        setDraft({ description: detail.description, owner: detail.owner, environment: detail.environment, location: detail.location, technology: detail.technology });
         setRelationships(rels);
       })
       .catch((err: Error) => {
@@ -95,6 +104,16 @@ export function EntityPanel({
     () => relationships.flatMap((r) => r.evidence.map((e) => ({ evidence: e, relationship: r }))),
     [relationships],
   );
+
+  const save = () => {
+    if (!entity) return;
+    setSaving(true);
+    setError(null);
+    api.updateEntity(entity.id, draft)
+      .then((updated) => { setEntity(updated); setEditing(false); onUpdated(); })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setSaving(false));
+  };
 
   if (!entityId) return null;
 
@@ -173,8 +192,27 @@ export function EntityPanel({
             <GitBranch className="h-3 w-3" />
             Focus
           </Button>
+          <Button size="xs" variant="outline" onClick={() => setEditing((value) => !value)} aria-expanded={editing}>
+            <Pencil className="h-3 w-3" /> Edit
+          </Button>
         </div>
       )}
+
+      {editing && entity && <div className="max-h-[50%] overflow-y-auto border-b border-line bg-surface-2 px-4 py-3">
+        <h3 className="text-[12px] font-semibold text-ink">Edit entity details</h3>
+        <p className="mt-0.5 text-[10.5px] text-muted">These fields are kept when you rescan.</p>
+        <div className="mt-3 space-y-2">
+          <div><Label htmlFor="entity-description">Description</Label><Textarea id="entity-description" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} className="mt-1" /></div>
+          <div><Label htmlFor="entity-owner">Owner</Label><Input id="entity-owner" value={draft.owner} onChange={(e) => setDraft({ ...draft, owner: e.target.value })} className="mt-1" /></div>
+          <div><Label htmlFor="entity-technology">Technology</Label><Input id="entity-technology" value={draft.technology} onChange={(e) => setDraft({ ...draft, technology: e.target.value })} className="mt-1" /></div>
+          <div><Label htmlFor="entity-location">Location</Label><Input id="entity-location" value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} className="mt-1" /></div>
+          <div><Label htmlFor="entity-environment">Environment</Label><select id="entity-environment" value={draft.environment} onChange={(e) => setDraft({ ...draft, environment: e.target.value as Environment })} className="mt-1 h-8 w-full rounded-[5px] border border-line-strong bg-surface-2 px-2.5 text-[12.5px] text-ink">
+            {["unknown", "development", "test", "production"].map((value) => <option key={value} value={value}>{value}</option>)}
+          </select></div>
+        </div>
+        {error && <p role="alert" className="mt-2 text-[11px] text-danger">{error}</p>}
+        <div className="mt-3 flex gap-2"><Button size="sm" onClick={save} disabled={saving}>Save details</Button><Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button></div>
+      </div>}
 
       <div className="px-3 pt-2">
         <UnderlineTabs

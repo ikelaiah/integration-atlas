@@ -15,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 
 from atlas.demo.seeder import get_or_create_workspace, run_risk_analysis
 from atlas.domain import EntityType
-from atlas.models import Base, Entity, Evidence, Relationship, SecretEvent
+from atlas.models import Base, Entity, Evidence, Relationship, Scan, ScanEvent, SecretEvent
 from atlas.scanners.runner import iter_candidate_files, run_scan
 from atlas.services.graph import GraphIndex
 from atlas.services.impact import analyse_impact
@@ -317,6 +317,84 @@ def test_relationship_review_endpoint(client, session) -> None:
     # Rejected relationships disappear from the default graph.
     graph = client.get(f"/api/graph?workspace_id={workspace.id}")
     assert rel.id not in {e["id"] for e in graph.json()["edges"]}
+
+
+def test_preview_rolls_back_and_apply_records_actual_diff(client, session, tmp_path) -> None:
+    workspace = get_or_create_workspace(session, "Preview API")
+    session.commit()
+    source = tmp_path / "extract.sql"
+    source.write_text("SELECT StudentID FROM Student;", encoding="utf-8")
+    counts_before = tuple(
+        session.query(model).count()
+        for model in (Entity, Relationship, Evidence, Scan, ScanEvent)
+    )
+
+    preview = client.post(
+        "/api/scans/preview", json={"workspace_id": workspace.id, "root_path": str(tmp_path)}
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["diff_summary"]["entities"]["added"] > 0
+    assert tuple(
+        session.query(model).count()
+        for model in (Entity, Relationship, Evidence, Scan, ScanEvent)
+    ) == counts_before
+
+    source.write_text("SELECT StudentID FROM Student;\nSELECT Name FROM Student;", encoding="utf-8")
+    applied = client.post(
+        "/api/scans", json={"workspace_id": workspace.id, "root_path": str(tmp_path)}
+    )
+    assert applied.status_code == 201, applied.text
+    actual = applied.json()["scan"]["diff_summary"]
+    assert actual["entities"]["added"] > 0
+    assert client.get(f"/api/scans/{applied.json()['scan']['id']}").json()["scan"]["diff_summary"] == actual
+    history = client.get(f"/api/scans?workspace_id={workspace.id}").json()
+    assert history[0]["scan"]["id"] == applied.json()["scan"]["id"]
+    unchanged = client.post(
+        "/api/scans", json={"workspace_id": workspace.id, "root_path": str(tmp_path)}
+    )
+    assert unchanged.json()["scan"]["diff_summary"]["total"] == 0
+    assert client.post(
+        "/api/scans",
+        json={"workspace_id": workspace.id, "root_path": str(tmp_path), "apply_changes": False},
+    ).status_code == 400
+
+    source.unlink()
+    retirement = client.post(
+        "/api/scans/preview", json={"workspace_id": workspace.id, "root_path": str(tmp_path)}
+    )
+    assert retirement.status_code == 200
+    assert retirement.json()["diff_summary"]["entities"]["removed"] > 0
+    assert session.query(Entity).filter_by(workspace_id=workspace.id, is_active=True).count() > 0
+    applied_retirement = client.post(
+        "/api/scans", json={"workspace_id": workspace.id, "root_path": str(tmp_path)}
+    )
+    assert applied_retirement.json()["scan"]["diff_summary"]["entities"]["removed"] > 0
+
+
+def test_review_queue_verdict_and_note_survive_rescan(client, session, tmp_path) -> None:
+    workspace = get_or_create_workspace(session, "Queue API")
+    source = tmp_path / "extract.sql"
+    source.write_text("SELECT StudentID FROM Student;", encoding="utf-8")
+    run_scan(session, workspace, tmp_path)
+    session.commit()
+
+    queue = client.get(f"/api/review?workspace_id={workspace.id}&status=proposed")
+    assert queue.status_code == 200, queue.text
+    assert queue.json()["items"]
+    rel_id = queue.json()["items"][0]["id"]
+    verdict = client.post(
+        f"/api/review/{rel_id}",
+        json={"review_status": "rejected", "note": "Reviewed. password=supersecret123"},
+    )
+    assert verdict.status_code == 200, verdict.text
+    assert verdict.json()["review_status"] == "rejected"
+    assert "supersecret123" not in verdict.text
+    assert client.get(f"/api/review?workspace_id={workspace.id}&status=rejected").json()["items"]
+
+    run_scan(session, workspace, tmp_path)
+    session.commit()
+    after = client.get(f"/api/review?workspace_id={workspace.id}&status=rejected").json()
+    assert any(item["id"] == rel_id for item in after["items"])
 
 
 def test_entity_detail_includes_relationships(client, session) -> None:

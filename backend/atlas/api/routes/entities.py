@@ -288,10 +288,12 @@ def add_evidence(
     return evidence
 
 
-def _relationship_detail(db: Session, relationship: Relationship) -> dict:
+def _relationship_detail(
+    db: Session, relationship: Relationship, evidence_rows: list[Evidence] | None = None
+) -> dict:
     source = db.get(Entity, relationship.source_id)
     target = db.get(Entity, relationship.target_id)
-    evidence = list(
+    evidence = evidence_rows if evidence_rows is not None else list(
         db.scalars(select(Evidence).where(Evidence.relationship_id == relationship.id))
     )
     from atlas.schemas import EntityOut, RelationshipDetail, RelationshipOut

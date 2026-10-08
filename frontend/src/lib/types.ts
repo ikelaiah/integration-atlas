@@ -237,3 +237,31 @@ export interface ScanProgress {
   warnings: number;
   events: string[];
 }
+
+export interface ScanChange {
+  kind: "entity" | "relationship";
+  action: "added" | "updated" | "removed";
+  id: string;
+  type: string;
+  name: string;
+}
+
+export interface ScanDiff {
+  entities: Record<"added" | "updated" | "removed", number>;
+  relationships: Record<"added" | "updated" | "removed", number>;
+  total: number;
+  changes: ScanChange[];
+  truncated: boolean;
+}
+
+export interface ScanPreview {
+  scanner_summary: Record<string, unknown>;
+  diff_summary: ScanDiff;
+}
+
+export interface ReviewPage {
+  items: RelationshipDetail[];
+  total: number;
+  limit: number;
+  offset: number;
+}

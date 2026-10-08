@@ -49,3 +49,13 @@
 - [x] G5. Acceptance test for the first vertical slice
 - [x] G6. Optional Docker convenience (Dockerfile + compose)
 - [x] G7. ruff clean across backend + tests
+
+## v0.2.0 — Trust and Review
+
+- [x] Scan preview with durable rollback, shared path validation and bounded diff
+- [x] Applied scan history with actual diff and consistent API response
+- [x] Review queue API with evidence, verdict and redacted note
+- [x] Scan preview/apply and review queue UI
+- [x] Entity edit form and refreshed graph/detail state
+- [x] Operator docs, release notes and version 0.2.0
+- [ ] Backend and frontend checks, code review, CI, release and Pages verification

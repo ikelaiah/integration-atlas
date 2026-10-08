@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ATLAS_", extra="ignore")
 
     app_name: str = "Integration Atlas"
-    version: str = "0.1.0"
+    version: str = "0.2.0"
 
     #: Directory holding the local SQLite database and any local state.
     data_dir: Path = Path.home() / ".integration-atlas"

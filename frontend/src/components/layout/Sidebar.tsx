@@ -9,6 +9,7 @@ import {
   ScanSearch,
   Settings,
   ShieldAlert,
+  ShieldCheck,
   Waypoints,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,7 @@ const NAV = [
   { to: "/data", label: "Data", icon: Database },
   { to: "/risks", label: "Risks", icon: ShieldAlert },
   { to: "/scans", label: "Scans", icon: ScanSearch },
+  { to: "/review", label: "Review", icon: ShieldCheck },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
