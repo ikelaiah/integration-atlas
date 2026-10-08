@@ -44,6 +44,16 @@ experience, not only feature count.
 - Shared results and exports keep the source and confidence needed to assess
   them.
 
+## Publish the documentation site
+
+The `DocSprout Pages` workflow builds the README and selected `docs/` pages and
+publishes them to GitHub Pages. For the first deployment, set the repository's
+Pages source to **GitHub Actions** in **Settings → Pages → Build and deployment**.
+After enabling Pages, start the workflow from **Actions → DocSprout Pages →
+Run workflow** on the default branch. Later pushes to the default branch publish
+automatically. The site is available at
+https://ikelaiah.github.io/integration-atlas/.
+
 ## v0.1.0 release checks
 
 - [ ] CI passes on Python 3.11, 3.12, and 3.13.
