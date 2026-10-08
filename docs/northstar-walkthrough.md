@@ -4,7 +4,7 @@ Northstar Education Group is a fictional estate included with Atlas. This walkth
 
 ## Start Atlas
 
-From a clean checkout, follow the [Quick start](../README.md#-quick-start) to install the CLI and build the web interface, then run:
+From a clean checkout, follow the [Quick start](../README.md#quick-start) to install the CLI and build the web interface, then run:
 
 ```bash
 atlas demo
