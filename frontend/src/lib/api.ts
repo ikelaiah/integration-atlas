@@ -8,6 +8,9 @@ import type {
   PathResult,
   RelationshipDetail,
   RiskFinding,
+  ReviewPage,
+  ReviewStatus,
+  ScanPreview,
   ScanProgress,
   SearchResponse,
   Traversal,
@@ -65,6 +68,10 @@ export const api = {
     request<GraphResponse>(`/api/graph${qs({ workspace_id: workspaceId, ...params })}`),
 
   entity: (id: string) => request<EntityDetail>(`/api/entities/${id}`),
+  updateEntity: (id: string, payload: Partial<Pick<EntityDetail, "description" | "owner" | "environment" | "location" | "technology">>) =>
+    request<EntityDetail>(`/api/entities/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+    }),
 
   entityRelationships: (id: string) =>
     request<RelationshipDetail[]>(`/api/entities/${id}/relationships`),
@@ -107,11 +114,24 @@ export const api = {
     list: (workspaceId?: string) =>
       request<ScanProgress[]>(`/api/scans${qs({ workspace_id: workspaceId })}`),
     get: (id: string) => request<ScanProgress>(`/api/scans/${id}`),
+    preview: (payload: { root_path: string; workspace_id: string }) =>
+      request<ScanPreview>("/api/scans/preview", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      }),
     run: (payload: { root_path: string; workspace_id?: string; workspace_name?: string }) =>
       request<ScanProgress>("/api/scans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+      }),
+  },
+  review: {
+    list: (workspaceId: string, status: ReviewStatus, offset = 0) =>
+      request<ReviewPage>(`/api/review${qs({ workspace_id: workspaceId, status, offset })}`),
+    decide: (id: string, review_status: ReviewStatus, note: string) =>
+      request<RelationshipDetail>(`/api/review/${id}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ review_status, note }),
       }),
   },
 };

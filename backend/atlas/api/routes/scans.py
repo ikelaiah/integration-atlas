@@ -9,26 +9,31 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from atlas.config import get_settings
 from atlas.db import get_db
 from atlas.demo.seeder import get_or_create_workspace, run_risk_analysis
 from atlas.domain import ScanStatus
 from atlas.models import Scan, Workspace
-from atlas.schemas import ScanCreate, ScanOut, ScanProgress
+from atlas.schemas import ScanCreate, ScanOut, ScanPreview, ScanProgress
+from atlas.services.scan_diff import compare, snapshot
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
 
 
-@router.get("", response_model=list[ScanOut])
-def list_scans(workspace_id: str | None = None, db: Session = Depends(get_db)) -> list[Scan]:
-    stmt = select(Scan).order_by(Scan.started_at.desc())
+@router.get("", response_model=list[ScanProgress])
+def list_scans(
+    workspace_id: str | None = None,
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> list[ScanProgress]:
+    stmt = select(Scan).options(selectinload(Scan.events)).order_by(Scan.started_at.desc()).limit(limit)
     if workspace_id:
         stmt = stmt.where(Scan.workspace_id == workspace_id)
-    return list(db.scalars(stmt))
+    return [_progress(row) for row in db.scalars(stmt)]
 
 
 @router.get("/{scan_id}", response_model=ScanProgress)
@@ -39,8 +44,7 @@ def get_scan(scan_id: str, db: Session = Depends(get_db)) -> ScanProgress:
     return _progress(scan)
 
 
-@router.post("", response_model=ScanProgress, status_code=201)
-def run_scan(payload: ScanCreate, db: Session = Depends(get_db)) -> ScanProgress:
+def _validated_root(payload: ScanCreate) -> Path:
     root = Path(payload.root_path).expanduser().resolve()
     settings = get_settings()
 
@@ -56,6 +60,37 @@ def run_scan(payload: ScanCreate, db: Session = Depends(get_db)) -> ScanProgress
                 detail="Scan root is outside the configured allowlist",
             )
 
+    return root
+
+
+@router.post("/preview", response_model=ScanPreview)
+def preview_scan(payload: ScanCreate, db: Session = Depends(get_db)) -> ScanPreview:
+    if not payload.workspace_id:
+        raise HTTPException(status_code=400, detail="Preview requires an existing workspace_id")
+    root = _validated_root(payload)
+    workspace = db.get(Workspace, payload.workspace_id)
+    if workspace is None:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    before = snapshot(db, workspace.id)
+    from atlas.scanners.runner import run_scan as run_discovery
+
+    savepoint = db.begin_nested()
+    try:
+        summary = run_discovery(db, workspace, root)
+        after = snapshot(db, workspace.id)
+        diff = compare(before, after)
+    finally:
+        savepoint.rollback()
+        db.expire_all()
+    return ScanPreview(scanner_summary=summary, diff_summary=diff)
+
+
+@router.post("", response_model=ScanProgress, status_code=201)
+def run_scan(payload: ScanCreate, db: Session = Depends(get_db)) -> ScanProgress:
+    if not payload.apply_changes:
+        raise HTTPException(status_code=400, detail="Use /api/scans/preview for a dry run")
+    root = _validated_root(payload)
+
     if payload.workspace_id:
         workspace = db.get(Workspace, payload.workspace_id)
         if workspace is None:
@@ -67,6 +102,7 @@ def run_scan(payload: ScanCreate, db: Session = Depends(get_db)) -> ScanProgress
             description=f"Discovered from {root}",
         )
 
+    before = snapshot(db, workspace.id)
     scan = Scan(
         workspace_id=workspace.id,
         root_path=str(root),
@@ -80,6 +116,7 @@ def run_scan(payload: ScanCreate, db: Session = Depends(get_db)) -> ScanProgress
 
     try:
         summary = run_discovery(db, workspace, root, scan=scan)
+        scan.diff_summary = compare(before, snapshot(db, workspace.id))
         scan.status = ScanStatus.COMPLETED.value
         scan.scanner_summary = summary
         run_risk_analysis(db, workspace)

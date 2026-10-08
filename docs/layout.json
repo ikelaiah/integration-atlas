@@ -41,6 +41,10 @@
           "path": "server-bundles.md"
         },
         {
+          "title": "Review workflow",
+          "path": "review-workflow.md"
+        },
+        {
           "title": "Security",
           "path": "security.md"
         },
@@ -76,6 +80,10 @@
         {
           "title": "Per-server discovery bundles",
           "path": "adr/006-per-server-discovery-bundles.md"
+        },
+        {
+          "title": "Scan preview and review",
+          "path": "adr/007-scan-preview-and-review.md"
         }
       ]
     }

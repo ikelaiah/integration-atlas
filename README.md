@@ -132,6 +132,15 @@ atlas scan run ./my-integrations
 atlas serve
 ```
 
+In the web app, open **Scans**, enter a folder, and choose **Preview scan**.
+The preview lists proposed additions, updates and retirements without changing
+the workspace. Choose **Apply scan** to scan the current files and save the
+actual result in scan history. Open **Review** to inspect relationship evidence
+and confirm or reject discoveries. Select an entity in **Atlas** and choose
+**Edit** to correct its description, owner, technology, location or environment.
+These manual fields and review verdicts survive later rescans. See the
+[review workflow](docs/review-workflow.md) for a guided example.
+
 ### 🎨 Frontend development
 
 ```bash
@@ -251,14 +260,16 @@ To report a security issue privately, follow [`SECURITY.md`](https://github.com/
 
 ## 🗺️ Roadmap
 
-**Phase 1** *(current)* 🟢 — workspaces, filesystem discovery for Python,
+**Phase 1** 🟢 — workspaces, filesystem discovery for Python,
 PowerShell, SQL and config, secret redaction, normalised entity/relationship
 model with evidence, SQLite, FastAPI, React graph UI, entity detail, search,
 impact analysis, risk engine, demo estate.
 
-**Phase 2** 🟡 — rescan review workflow, manual editing UI, confidence review
-queue, advanced graph filtering, path explorer polish, Mermaid/PlantUML
-export, historical graph comparison.
+**v0.2.0** 🟢 — scan preview and actual diff history, manual entity editing,
+and an evidence-backed relationship review queue.
+
+**Next** 🟡 — advanced graph filtering, path explorer polish,
+Mermaid/PlantUML export and historical graph comparison.
 
 **Phase 3** 🔵 — SQL Server Agent scheduler exports, GitHub Actions and Azure
 Automation workflow exports, PostgreSQL storage, team collaboration, and

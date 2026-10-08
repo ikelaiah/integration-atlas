@@ -10,7 +10,7 @@ import {
   ShieldOff,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import type { ScanProgress } from "@/lib/types";
+import type { ScanDiff, ScanPreview, ScanProgress } from "@/lib/types";
 import { cn, formatNumber, relativeTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,9 @@ export function ScansPage({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<ScanProgress | null>(null);
+  const [preview, setPreview] = useState<ScanPreview | null>(null);
+  const [previewPath, setPreviewPath] = useState("");
+  const [selectedScan, setSelectedScan] = useState<string | null>(null);
 
   const load = () => {
     if (!workspaceId) return;
@@ -38,20 +41,34 @@ export function ScansPage({
     api.scans
       .list(workspaceId)
       .then(setScans)
-      .catch(() => setScans([]))
+      .catch((err: Error) => { setScans([]); setError(err.message); })
       .finally(() => setLoading(false));
   };
 
   useEffect(load, [workspaceId]);
 
+  const previewScan = () => {
+    if (!rootPath.trim() || !workspaceId) return;
+    setRunning(true);
+    setError(null);
+    setPreview(null);
+    setLastResult(null);
+    api.scans.preview({ root_path: rootPath.trim(), workspace_id: workspaceId })
+      .then((result) => { setPreview(result); setPreviewPath(rootPath.trim()); })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setRunning(false));
+  };
+
   const runScan = () => {
-    if (!rootPath.trim()) return;
+    if (!preview || !workspaceId) return;
     setRunning(true);
     setError(null);
     api.scans
-      .run({ root_path: rootPath.trim(), workspace_id: workspaceId ?? undefined })
+      .run({ root_path: previewPath, workspace_id: workspaceId })
       .then((result) => {
         setLastResult(result);
+        setPreview(null);
+        setSelectedScan(result.scan.id);
         load();
         onScanComplete();
       })
@@ -80,29 +97,44 @@ export function ScansPage({
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-end gap-2.5">
+            <div className="flex flex-wrap items-end gap-2.5">
               <div className="flex-1">
-                <Label>Folder path</Label>
+                <Label htmlFor="scan-root-path">Folder path</Label>
                 <Input
+                  id="scan-root-path"
                   value={rootPath}
                   onChange={(e) => setRootPath(e.target.value)}
                   placeholder="/path/to/integrations  (e.g. ./examples/northstar)"
                   className="mt-1"
-                  onKeyDown={(e) => e.key === "Enter" && runScan()}
+                  onKeyDown={(e) => e.key === "Enter" && previewScan()}
                 />
               </div>
-              <Button variant="default" size="md" onClick={runScan} disabled={!rootPath.trim() || running}>
+              <Button variant="default" size="md" onClick={previewScan} disabled={!rootPath.trim() || !workspaceId || running}>
                 {running ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> Scanning…
                   </>
                 ) : (
                   <>
-                    <Play className="h-3.5 w-3.5" /> Run scan
+                    <FileSearch className="h-3.5 w-3.5" /> Preview scan
                   </>
                 )}
               </Button>
             </div>
+            {preview && rootPath.trim() === previewPath && (
+              <div className="mt-3 rounded-[7px] border border-accent/30 bg-surface-2 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-[12px] font-semibold text-ink">Proposed changes</div>
+                    <p className="mt-0.5 text-[11px] text-muted">Preview leaves the workspace unchanged. Apply scans current files again.</p>
+                  </div>
+                  <Button size="sm" onClick={runScan} disabled={running}>
+                    <Play className="h-3.5 w-3.5" /> Apply scan
+                  </Button>
+                </div>
+                <DiffSummary diff={preview.diff_summary} />
+              </div>
+            )}
             {error && (
               <div className="mt-2 rounded-[5px] border border-danger/30 bg-danger/10 px-2.5 py-1.5 text-[11px] text-danger">
                 {error}
@@ -136,6 +168,9 @@ export function ScansPage({
                     ))}
                   </div>
                 )}
+                {hasScanDiff(lastResult.scan.diff_summary) && (
+                  <DiffSummary diff={lastResult.scan.diff_summary} />
+                )}
               </div>
             )}
           </CardContent>
@@ -160,9 +195,10 @@ export function ScansPage({
             )}
             {!loading &&
               scans.map((scan) => (
-                <div
+                <button type="button" onClick={() => setSelectedScan(selectedScan === scan.scan.id ? null : scan.scan.id)}
+                  aria-expanded={selectedScan === scan.scan.id}
                   key={scan.scan.id}
-                  className="flex items-center gap-3 rounded-[8px] border border-line bg-surface px-3.5 py-2.5"
+                  className="flex w-full flex-wrap items-center gap-3 rounded-[8px] border border-line bg-surface px-3.5 py-2.5 text-left hover:bg-surface-2"
                 >
                   <div
                     className={cn(
@@ -194,11 +230,36 @@ export function ScansPage({
                       </Badge>
                     )}
                   </div>
-                </div>
+                  {selectedScan === scan.scan.id && hasScanDiff(scan.scan.diff_summary) && (
+                    <div className="w-full"><DiffSummary diff={scan.scan.diff_summary} /></div>
+                  )}
+                </button>
               ))}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+function hasScanDiff(value: unknown): value is ScanDiff {
+  return typeof value === "object" && value !== null && "total" in value && "changes" in value;
+}
+
+function DiffSummary({ diff }: { diff: ScanDiff }) {
+  return <div className="mt-2.5">
+    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">
+      {(["entities", "relationships"] as const).map((kind) =>
+        <span key={kind}><span className="font-medium text-ink">{kind}</span> · {diff[kind].added} added · {diff[kind].updated} updated · {diff[kind].removed} retired</span>
+      )}
+    </div>
+    {diff.changes.length > 0 ? <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto border-t border-line pt-2 text-[11px]">
+      {diff.changes.map((change) => <li key={`${change.kind}-${change.id}`} className="flex gap-2">
+        <span className={cn("w-14 shrink-0 capitalize", change.action === "removed" ? "text-danger" : "text-accent-strong")}>{change.action}</span>
+        <span className="truncate text-ink" title={change.name}>{change.name}</span>
+        <span className="ml-auto shrink-0 text-subtle">{change.type.replaceAll("_", " ")}</span>
+      </li>)}
+      {diff.truncated && <li className="text-subtle">More changes omitted from this list.</li>}
+    </ul> : <p className="mt-2 text-[11px] text-subtle">No graph changes.</p>}
+  </div>;
 }

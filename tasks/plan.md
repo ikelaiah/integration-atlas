@@ -140,3 +140,16 @@ follows REVERSE edges. See ADR-002.
 
 - None blocking. Phase 2 items (rescan reconciliation, manual editing UI, Windows
   Scheduler XML, cron, GraphML export, risk UI) are deferred by design.
+
+## v0.2.0 — Trust and Review
+
+See [the v0.2.0 specification](v0.2.0-spec.md). Ship in four vertical slices:
+
+1. Make scan history use the documented progress response; compute bounded graph
+   diffs for applied scans and rollback preview scans. Verify with API tests.
+2. Add a relationship review queue, evidence display, verdicts and notes. Verify
+   filtering, redaction and verdict survival after rescanning.
+3. Add entity editing in the detail panel and the scan preview/apply UI. Verify
+   manual field survival, frontend type checking and production build.
+4. Update operator docs and version metadata; run full checks, review the diff,
+   merge after CI, publish v0.2.0 and verify GitHub Pages deployment.

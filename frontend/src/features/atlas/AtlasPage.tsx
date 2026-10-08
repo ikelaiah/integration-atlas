@@ -517,6 +517,7 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
           }}
           onImpact={handleImpact}
           onFocus={handleFocus}
+          onUpdated={loadGraph}
         />
       )}
 
