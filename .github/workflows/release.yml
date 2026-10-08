@@ -1,0 +1,76 @@
+name: Publish release
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+      - id: release
+        name: Find and validate release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t notes < <(git diff --name-only HEAD^1 HEAD -- '.release-notes/v*.md')
+          if [ "${#notes[@]}" -eq 0 ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "${#notes[@]}" -ne 1 ]; then
+            echo "Expected one release-notes file in this commit; found ${#notes[@]}." >&2
+            exit 1
+          fi
+          notes_file="${notes[0]}"
+          tag="${notes_file##*/}"
+          tag="${tag%.md}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag derived from $notes_file." >&2
+            exit 1
+          fi
+          if grep -q '^#' "$notes_file"; then
+            echo "Release body must not contain a title heading." >&2
+            exit 1
+          fi
+          python - "$tag" <<'PY'
+          import sys
+          import tomllib
+          from pathlib import Path
+          version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+          if f"v{version}" != sys.argv[1]:
+              raise SystemExit(f"Release note tag {sys.argv[1]} does not match pyproject version {version}")
+          PY
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "notes_file=$notes_file" >> "$GITHUB_OUTPUT"
+      - name: Create GitHub Release
+        if: steps.release.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_NOTES: ${{ steps.release.outputs.notes_file }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "GitHub Release $RELEASE_TAG already exists."
+            exit 0
+          fi
+          gh release create "$RELEASE_TAG" \
+            --target "$TARGET_SHA" \
+            --title "$RELEASE_TAG" \
+            --notes-file "$RELEASE_NOTES"
