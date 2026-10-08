@@ -1,7 +1,8 @@
 {
   "schema_version": 1,
   "home": {
-    "path": "README.md"
+    "path": "README.md",
+    "source": "root"
   },
   "unlisted": "exclude",
   "navigation": [
