@@ -121,4 +121,4 @@ cannot leak a secret.
 Security issues should be reported through GitHub's private vulnerability
 reporting for this repository. If that option is unavailable, open a minimal
 issue asking for a private contact and keep vulnerability details out of it.
-See [`SECURITY.md`](../SECURITY.md).
+See [`SECURITY.md`](https://github.com/ikelaiah/integration-atlas/blob/main/SECURITY.md).

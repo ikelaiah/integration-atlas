@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "project": {
+    "name": "Integration Atlas",
+    "description": "Local-first discovery and impact analysis for integration estates."
+  },
+  "identity": {
+    "footer": "Map the systems you inherited before you change them.",
+    "links": [
+      {
+        "label": "Source code",
+        "url": "https://github.com/ikelaiah/integration-atlas"
+      }
+    ]
+  }
+}

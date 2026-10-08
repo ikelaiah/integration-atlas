@@ -26,6 +26,7 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
+      - run: atlas demo
       - run: ruff check backend tests
       - run: pytest -o addopts= -q
 
@@ -45,6 +46,20 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install "git+https://github.com/ikelaiah/docsprout.git@v1.3.1"
+      - run: docsprout check
+      - run: docsprout audit --strict
+      - run: docsprout build --release preview --output build/docs-site
 
   docker:
     name: Docker image
