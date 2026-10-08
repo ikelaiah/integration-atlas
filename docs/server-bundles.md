@@ -73,6 +73,7 @@ Run on the target host (e.g. from an admin shell) and write into the bundle:
 ```powershell
 $bundle = "C:\collect\APP-SERVER-01"
 New-Item -ItemType Directory -Force $bundle\windows\tasks | Out-Null
+New-Item -ItemType Directory -Force $bundle\scripts | Out-Null
 
 @{
   hostname    = $env:COMPUTERNAME

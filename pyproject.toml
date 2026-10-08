@@ -45,9 +45,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/anomalyco/integration-atlas"
-Documentation = "https://github.com/anomalyco/integration-atlas/tree/main/docs"
-Issues = "https://github.com/anomalyco/integration-atlas/issues"
+Homepage = "https://github.com/ikelaiah/integration-atlas"
+Documentation = "https://github.com/ikelaiah/integration-atlas/tree/main/docs"
+Issues = "https://github.com/ikelaiah/integration-atlas/issues"
 
 [project.scripts]
 atlas = "atlas.cli:main"

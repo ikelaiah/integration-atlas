@@ -83,21 +83,48 @@ execution server, so identical names on different hosts never merge. See
 ## 🚀 Quick start
 
 ```bash
-git clone https://github.com/anomalyco/integration-atlas
+git clone https://github.com/ikelaiah/integration-atlas.git
 cd integration-atlas
-
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
-
-atlas demo                         # load the Northstar demo estate
-atlas serve                        # http://localhost:8000
 ```
 
-Or discover from your own artefacts:
+Docker is optional. For a local install, you need Python 3.11 or newer. To open
+the web interface, also install Node.js 22 or newer. If you only need the CLI,
+you can skip the frontend build steps below.
+
+**Windows (PowerShell):**
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+```
+
+**macOS or Linux:**
 
 ```bash
-atlas scan run ./examples/northstar
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+```
+
+To build the web interface, run these commands from the project root:
+
+```bash
+npm --prefix frontend ci
+npm --prefix frontend run build
+```
+
+Now load the sample estate and start Atlas:
+
+```bash
+atlas demo                         # load the Northstar demo estate
+atlas serve                        # open http://localhost:8000
+```
+
+To scan your own files instead, keep them together in a folder and run:
+
+```bash
+atlas scan run ./my-integrations
 atlas serve
 ```
 
@@ -109,8 +136,9 @@ npm install
 npm run dev                        # http://localhost:5173, proxies /api to :8000
 ```
 
-Build the production bundle into `frontend/dist` and `atlas serve` will serve
-it at `http://localhost:8000`.
+For frontend development with hot reload, run `npm --prefix frontend run dev`
+from the project root. The web interface opens at `http://localhost:5173` and
+uses the local Atlas API on port 8000.
 
 ## 🎓 The demo estate
 
