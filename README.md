@@ -1,5 +1,7 @@
 # 🗺️ Integration Atlas
 
+![Integration Atlas banner](docs/assets/integration-atlas-banner.svg)
+
 > **Map the systems, scripts, databases, files and APIs hidden inside your
 > integration estate — then see what could break when something changes.**
 
