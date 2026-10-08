@@ -1,0 +1,2 @@
+# User crontab for svc_int (no user column).
+0 5 * * * /usr/local/bin/nightly_sync.py

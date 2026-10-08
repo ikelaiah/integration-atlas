@@ -1,0 +1,6 @@
+{
+  "hostname": "WINDOWS-APP01",
+  "fqdn": "windows-app01.northstar.example",
+  "os": "windows",
+  "environment": "production"
+}

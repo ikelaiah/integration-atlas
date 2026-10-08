@@ -1,0 +1,278 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/* Integration Atlas design tokens                                     */
+/* Dark-first, restrained, typographic.                                */
+/* ------------------------------------------------------------------ */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Surfaces — cool near-blacks with a slight blue cast */
+  --color-canvas: #090b0f;
+  --color-surface: #0e1218;
+  --color-surface-2: #141a22;
+  --color-surface-3: #1a222c;
+  --color-overlay: #1e2732;
+
+  /* Lines */
+  --color-line: #212a35;
+  --color-line-strong: #2c3744;
+
+  /* Text */
+  --color-ink: #e8eef5;
+  --color-ink-muted: #93a2b3;
+  --color-ink-subtle: #64748b;
+  --color-ink-inverse: #090b0f;
+
+  /* Accent — restrained cool blue used sparingly for interaction */
+  --color-accent: #4c8dff;
+  --color-accent-soft: #4c8dff1f;
+  --color-accent-strong: #79aaff;
+
+  /* Semantic */
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --color-info: #60a5fa;
+
+  /* Entity palette — one hue per domain concept */
+  --color-e-system: #2dd4bf;
+  --color-e-application: #a78bfa;
+  --color-e-server: #fb7185;
+  --color-e-database: #60a5fa;
+  --color-e-schema: #38bdf8;
+  --color-e-table: #60a5fa;
+  --color-e-column: #7dd3fc;
+  --color-e-script: #22d3ee;
+  --color-e-scheduled_job: #fbbf24;
+  --color-e-api: #4ade80;
+  --color-e-endpoint: #34d399;
+  --color-e-file: #94a3b8;
+  --color-e-directory: #cbd5e1;
+  --color-e-sftp_location: #8fa3b8;
+  --color-e-queue: #fb923c;
+  --color-e-external_service: #818cf8;
+  --color-e-integration: #c084fc;
+  --color-e-unknown: #6b7280;
+
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Base                                                                */
+/* ------------------------------------------------------------------ */
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    overflow: hidden;
+  }
+
+  ::selection {
+    background: var(--color-accent-soft);
+    color: var(--color-ink);
+  }
+
+  /* Refined scrollbars */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line-strong);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-ink-subtle);
+    background-clip: content-box;
+  }
+
+  :focus-visible {
+    outline: 1.5px solid var(--color-accent);
+    outline-offset: 1px;
+    border-radius: var(--radius-xs);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Utilities                                                           */
+/* ------------------------------------------------------------------ */
+@layer utilities {
+  .text-ink {
+    color: var(--color-ink);
+  }
+  .text-muted {
+    color: var(--color-ink-muted);
+  }
+  .text-subtle {
+    color: var(--color-ink-subtle);
+  }
+
+  .surface {
+    background-color: var(--color-surface);
+  }
+  .surface-2 {
+    background-color: var(--color-surface-2);
+  }
+  .surface-3 {
+    background-color: var(--color-surface-3);
+  }
+
+  .panel-shadow {
+    box-shadow:
+      0 0 0 1px var(--color-line),
+      0 8px 28px -12px rgb(0 0 0 / 0.55);
+  }
+
+  .float-shadow {
+    box-shadow:
+      0 0 0 1px var(--color-line-strong),
+      0 16px 48px -16px rgb(0 0 0 / 0.7);
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Subtle grid backdrop for the graph canvas */
+  .graph-backdrop {
+    background-color: var(--color-canvas);
+    background-image:
+      radial-gradient(circle at 1px 1px, #1b2430 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+
+  .fade-in {
+    animation: fade-in 180ms ease-out;
+  }
+  .slide-up {
+    animation: slide-up 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .slide-in-right {
+    animation: slide-in-right 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .pulse-soft {
+    animation: pulse-soft 1.9s ease-in-out infinite;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* React Flow overrides                                                */
+/* ------------------------------------------------------------------ */
+.react-flow__attribution {
+  display: none;
+}
+
+.react-flow__node {
+  transition:
+    opacity 160ms ease,
+    filter 160ms ease;
+}
+
+.react-flow__edge {
+  transition: opacity 160ms ease;
+}
+
+.react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.react-flow__handle {
+  width: 6px;
+  height: 6px;
+  border: none;
+  background: transparent;
+}
+
+.react-flow__controls {
+  box-shadow: none;
+  background: transparent;
+  border: none;
+}
+
+.react-flow__minimap {
+  background-color: var(--color-surface) !important;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.dimmed {
+  opacity: 0.16;
+  filter: saturate(0.25);
+}
+
+.highlighted {
+  opacity: 1;
+}

@@ -1,0 +1,18 @@
+services:
+  atlas:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # Persist the SQLite database between runs.
+      - atlas-data:/data
+      # Mount the artefacts you want to scan.
+      - ./examples:/scan:ro
+    environment:
+      # A JSON array, because the setting is a list[Path] and pydantic-settings
+      # parses complex values as JSON. A bare string raises SettingsError.
+      ATLAS_SCAN_ROOT_ALLOWLIST: '["/scan"]'
+    restart: unless-stopped
+
+volumes:
+  atlas-data:

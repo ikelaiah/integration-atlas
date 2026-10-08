@@ -1,0 +1,2 @@
+# System crontab (user column present).
+*/15 * * * * svc_int /usr/local/bin/identity_sync.py

@@ -1,0 +1,6 @@
+{
+  "hostname": "LINUX-APP02",
+  "fqdn": "linux-app02.northstar.example",
+  "os": "linux",
+  "environment": "production"
+}

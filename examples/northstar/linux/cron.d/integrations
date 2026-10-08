@@ -1,0 +1,7 @@
+# /etc/cron.d/integrations
+# Managed by the platform team. Owner: Integration Team
+
+*/15 * * * * svc_int /opt/integrations/identity/identity_sync.py
+5 * * * *   svc_int /opt/integrations/enrolment/nightly_sync.py
+0 8 * * *   svc_int /opt/integrations/comms/comms_digest.py
+0 1 * * 0   root    /usr/local/bin/archive-cleanup.sh

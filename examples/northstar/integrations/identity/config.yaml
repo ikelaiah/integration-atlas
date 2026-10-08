@@ -1,0 +1,17 @@
+service: identity-sync
+owner: Identity Team
+schedule: "*/15 * * * *"
+host: BATCH-01
+
+database:
+  host: SQL-PROD-01
+  name: IdentityHub
+  port: 1433
+
+api:
+  scim_url: https://identity.northstar.edu/scim/v2
+  timeout: 30
+
+paths:
+  student_file: /integrations/student/students.csv
+  log_dir: /var/log/integrations

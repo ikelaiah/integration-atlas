@@ -1,0 +1,18 @@
+{
+  "service": "enrolment-sync",
+  "owner": "Digital Team",
+  "database": {
+    "host": "SQL-PROD-01",
+    "name": "PortalDB",
+    "port": 5432
+  },
+  "endpoints": {
+    "import": "https://enrol.northstar.edu/api/v2/applications/import",
+    "crm": "https://api.admissionscrm.example/v1/leads"
+  },
+  "sftp": {
+    "host": "sftp01.northstar.edu",
+    "inbound": "/inbound/enrolment"
+  },
+  "schedule": "5 * * * *"
+}
