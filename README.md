@@ -6,7 +6,9 @@
 > integration estate — then see what could break when something changes.**
 
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
-[![License](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green)](https://github.com/ikelaiah/integration-atlas/blob/main/LICENSE)
+
+[📚 Documentation](https://ikelaiah.github.io/integration-atlas/) · [🧭 Northstar walkthrough](https://ikelaiah.github.io/integration-atlas/northstar-walkthrough.html)
 
 You inherited a folder of PowerShell jobs, a database nobody understands, three
 CSV exports that feed systems you have never seen, and a note that says *"don't
@@ -245,7 +247,7 @@ Full model in [`docs/security.md`](docs/security.md). The short version:
 * 📁 Scan roots are explicit, optionally allowlisted, and resolved before use.
 * 🛡️ Malformed files produce warnings, not crashes.
 
-To report a security issue privately, follow [`SECURITY.md`](SECURITY.md).
+To report a security issue privately, follow [`SECURITY.md`](https://github.com/ikelaiah/integration-atlas/blob/main/SECURITY.md).
 
 ## 🗺️ Roadmap
 
@@ -258,9 +260,10 @@ impact analysis, risk engine, demo estate.
 queue, advanced graph filtering, path explorer polish, Mermaid/PlantUML
 export, historical graph comparison.
 
-**Phase 3** 🔵 — SQL Server Agent, GitHub Actions, Azure Automation, runtime
-heartbeat collectors, optional lightweight agents, PostgreSQL storage, team
-collaboration, authentication.
+**Phase 3** 🔵 — SQL Server Agent scheduler exports, GitHub Actions and Azure
+Automation workflow exports, PostgreSQL storage, team collaboration, and
+authentication. These integrations read exported definitions; they do not
+require installing an Atlas agent on source servers.
 
 ## 🤝 Contributing
 
@@ -285,7 +288,7 @@ The release quality bar and v0.1.0 checklist are in
 
 ## 📄 Licence
 
-Apache 2.0 — see [LICENSE](LICENSE).
+Apache 2.0 — see [LICENSE](https://github.com/ikelaiah/integration-atlas/blob/main/LICENSE).
 
 ---
 

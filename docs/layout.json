@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "home": {
+    "path": "README.md",
+    "source": "root"
+  },
+  "unlisted": "exclude",
+  "navigation": [
+    {
+      "title": "Start here",
+      "pages": [
+        {
+          "title": "Overview",
+          "path": "README.md",
+          "source": "root"
+        },
+        {
+          "title": "Northstar walkthrough",
+          "path": "northstar-walkthrough.md"
+        }
+      ]
+    },
+    {
+      "title": "Understand Atlas",
+      "pages": [
+        {
+          "title": "Architecture",
+          "path": "architecture.md"
+        },
+        {
+          "title": "Domain model",
+          "path": "domain-model.md"
+        }
+      ]
+    },
+    {
+      "title": "Use and maintain Atlas",
+      "pages": [
+        {
+          "title": "Server bundles",
+          "path": "server-bundles.md"
+        },
+        {
+          "title": "Security",
+          "path": "security.md"
+        },
+        {
+          "title": "Release quality",
+          "path": "release-quality.md"
+        }
+      ]
+    },
+    {
+      "title": "Architecture decisions",
+      "pages": [
+        {
+          "title": "SQLite storage",
+          "path": "adr/001-sqlite-default-storage.md"
+        },
+        {
+          "title": "Relationship flow semantics",
+          "path": "adr/002-relationship-flow-semantics.md"
+        },
+        {
+          "title": "Entity identity and rescans",
+          "path": "adr/003-entity-identity-and-rescans.md"
+        },
+        {
+          "title": "Secret redaction",
+          "path": "adr/004-secret-redaction-at-persistence.md"
+        },
+        {
+          "title": "Scan provenance and retirement",
+          "path": "adr/005-scan-provenance-and-retirement.md"
+        },
+        {
+          "title": "Per-server discovery bundles",
+          "path": "adr/006-per-server-discovery-bundles.md"
+        }
+      ]
+    }
+  ]
+}
