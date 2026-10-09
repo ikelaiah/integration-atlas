@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from atlas.config import get_settings
 from atlas.domain import ScanStatus, SourceKind
-from atlas.models import Scan, ScanEvent, Workspace
+from atlas.models import Scan, ScanEvent, ScanSnapshot, Workspace
 from atlas.scanners.base import (
     BINARY_EXTENSIONS,
     SKIP_DIRS,
@@ -37,6 +37,7 @@ from atlas.scanners.server_bundle import (
     server_for_path,
 )
 from atlas.scanners.sql_scanner import SqlScanner
+from atlas.services.history import capture_graph
 from atlas.services.redaction import find_secrets, redact
 
 
@@ -123,6 +124,8 @@ def run_scan(
         )
         session.add(scan)
         session.flush()
+
+    before_graph = capture_graph(session, workspace.id)
 
     plugins = scanners if scanners is not None else default_scanners()
     summary = ScanSummary(root_path=str(root))
@@ -211,6 +214,12 @@ def run_scan(
         root, parsed_ok_paths=parsed_ok_paths
     )
     summary.normalise = stats.as_dict()
+
+    session.add(ScanSnapshot(
+        scan_id=scan.id,
+        before_json=before_graph,
+        after_json=capture_graph(session, workspace.id),
+    ))
 
     scan.status = ScanStatus.COMPLETED.value
     scan.scanner_summary = summary.as_dict()

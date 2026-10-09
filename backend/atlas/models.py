@@ -262,6 +262,18 @@ class Scan(Base):
     )
 
 
+class ScanSnapshot(Base):
+    """Immutable graph checkpoints captured around one applied scan."""
+
+    __tablename__ = "scan_snapshots"
+
+    scan_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("scans.id", ondelete="CASCADE"), primary_key=True
+    )
+    before_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    after_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+
 class ScanEvent(Base):
     """Incremental progress/diff record for a scan."""
 

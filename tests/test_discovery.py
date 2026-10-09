@@ -6,6 +6,8 @@ normalise the findings, persist them, then answer questions through the API.
 
 from __future__ import annotations
 
+import json
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -15,9 +17,19 @@ from sqlalchemy.pool import StaticPool
 
 from atlas.demo.seeder import get_or_create_workspace, run_risk_analysis
 from atlas.domain import EntityType
-from atlas.models import Base, Entity, Evidence, Relationship, Scan, ScanEvent, SecretEvent
+from atlas.models import (
+    Base,
+    Entity,
+    Evidence,
+    Relationship,
+    Scan,
+    ScanEvent,
+    ScanSnapshot,
+    SecretEvent,
+)
 from atlas.scanners.runner import iter_candidate_files, run_scan
 from atlas.services.graph import GraphIndex
+from atlas.services.history import capture_graph, compare_graphs
 from atlas.services.impact import analyse_impact
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "northstar"
@@ -419,7 +431,7 @@ def test_preview_rolls_back_and_apply_records_actual_diff(client, session, tmp_p
     source.write_text("SELECT StudentID FROM Student;", encoding="utf-8")
     counts_before = tuple(
         session.query(model).count()
-        for model in (Entity, Relationship, Evidence, Scan, ScanEvent)
+        for model in (Entity, Relationship, Evidence, Scan, ScanEvent, ScanSnapshot)
     )
 
     preview = client.post(
@@ -429,7 +441,7 @@ def test_preview_rolls_back_and_apply_records_actual_diff(client, session, tmp_p
     assert preview.json()["diff_summary"]["entities"]["added"] > 0
     assert tuple(
         session.query(model).count()
-        for model in (Entity, Relationship, Evidence, Scan, ScanEvent)
+        for model in (Entity, Relationship, Evidence, Scan, ScanEvent, ScanSnapshot)
     ) == counts_before
 
     source.write_text("SELECT StudentID FROM Student;\nSELECT Name FROM Student;", encoding="utf-8")
@@ -462,6 +474,101 @@ def test_preview_rolls_back_and_apply_records_actual_diff(client, session, tmp_p
         "/api/scans", json={"workspace_id": workspace.id, "root_path": str(tmp_path)}
     )
     assert applied_retirement.json()["scan"]["diff_summary"]["entities"]["removed"] > 0
+
+
+def test_historical_checkpoints_compare_net_graph_and_enforce_workspace(client, session, tmp_path) -> None:
+    workspace = get_or_create_workspace(session, "History API")
+    other = get_or_create_workspace(session, "Other history")
+    session.commit()
+    source = tmp_path / "extract.sql"
+    source.write_text("SELECT StudentID FROM Student;", encoding="utf-8")
+
+    first = client.post(
+        "/api/scans", json={"workspace_id": workspace.id, "root_path": str(tmp_path)}
+    ).json()["scan"]["id"]
+    checkpoints = client.get(f"/api/scans/checkpoints?workspace_id={workspace.id}").json()
+    assert len(checkpoints) == 1
+    assert checkpoints[0]["before_counts"]["entities"] == 0
+    assert checkpoints[0]["after_counts"]["entities"] > 0
+    assert datetime.fromisoformat(checkpoints[0]["finished_at"]).tzinfo is not None
+    listed = client.get(f"/api/scans?workspace_id={workspace.id}").json()[0]
+    assert datetime.fromisoformat(listed["scan"]["finished_at"]).tzinfo is not None
+
+    params = {
+        "workspace_id": workspace.id,
+        "from_scan_id": first, "from_phase": "before",
+        "to_scan_id": first, "to_phase": "after",
+    }
+    initial = client.get("/api/scans/compare", params=params)
+    assert initial.status_code == 200, initial.text
+    assert initial.json()["counts"]["entities"]["added"] > 0
+    assert initial.json()["total"] == initial.json()["filtered_total"]
+    assert client.get("/api/scans/compare", params={**params, "limit": 1}).json()["truncated"]
+    assert client.get("/api/scans/compare", params={**params, "kind": "relationship"}).json()["filtered_total"] > 0
+    assert client.get("/api/scans/compare", params={**params, "action": "removed"}).json()["filtered_total"] == 0
+
+    source.unlink()
+    second = client.post(
+        "/api/scans", json={"workspace_id": workspace.id, "root_path": str(tmp_path)}
+    ).json()["scan"]["id"]
+    retired = client.get("/api/scans/compare", params={
+        **params, "from_phase": "after", "to_scan_id": second,
+    }).json()
+    assert retired["counts"]["entities"]["removed"] > 0
+    assert all(change["action"] == "removed" for change in retired["changes"])
+    net = client.get("/api/scans/compare", params={
+        **params, "to_scan_id": second,
+    }).json()
+    assert net["total"] == 0
+    older_page = client.get(
+        f"/api/scans/checkpoints?workspace_id={workspace.id}&limit=1&offset=1"
+    ).json()
+    assert [item["scan_id"] for item in older_page] == [first]
+    assert client.get("/api/scans/compare", params={
+        **params, "from_phase": "after", "to_phase": "before",
+    }).status_code == 400
+    assert client.get("/api/scans/compare", params={**params, "workspace_id": other.id}).status_code == 404
+
+    legacy = Scan(workspace_id=workspace.id, root_path="legacy", status="completed",
+                  started_at=session.get(Scan, first).started_at,
+                  finished_at=session.get(Scan, first).finished_at)
+    session.add(legacy)
+    session.commit()
+    assert client.get("/api/scans/compare", params={
+        **params, "from_scan_id": legacy.id,
+    }).status_code == 409
+    assert len(client.get(f"/api/scans/checkpoints?workspace_id={workspace.id}").json()) == 2
+
+
+def test_history_comparison_reports_field_changes_and_redacts_capture(session) -> None:
+    workspace = get_or_create_workspace(session, "History fields")
+    entity = Entity(
+        workspace_id=workspace.id, entity_type="system", name="password=supersecret123",
+        fingerprint="history-secret", owner="password=supersecret123",
+    )
+    session.add(entity)
+    session.flush()
+    captured = capture_graph(session, workspace.id)
+    assert "supersecret123" not in json.dumps(captured)
+
+    first = {"entities": {
+        "a": {"entity_type": "system", "name": "Alpha", "owner": "Team A"},
+        "b": {"entity_type": "system", "name": "Beta", "owner": "Team B"},
+    }, "relationships": {}}
+    second = {"entities": {
+        "a": {"entity_type": "system", "name": "Alpha", "owner": "Team C"},
+        "c": {"entity_type": "script", "name": "Gamma", "owner": "Team C"},
+    }, "relationships": {}}
+    result = compare_graphs(first, second, limit=1)
+    assert result["counts"]["entities"] == {"added": 1, "updated": 1, "removed": 1}
+    assert result["total"] == 3 and result["truncated"] is True
+    changed = compare_graphs(first, second, action="updated")["changes"]
+    assert len(changed) == 1
+    assert changed[0]["changed_fields"] == ["owner"]
+    assert changed[0]["before"]["owner"] == "Team A"
+    assert changed[0]["after"]["owner"] == "Team C"
+    assert compare_graphs(first, second, q="gamma")["filtered_total"] == 1
+    assert compare_graphs(first, second, offset=2, limit=1)["changes"][0]["name"] == "Gamma"
 
 
 def test_review_queue_verdict_and_note_survive_rescan(client, session, tmp_path) -> None:

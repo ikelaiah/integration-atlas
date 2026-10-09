@@ -11,13 +11,22 @@ import json
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, inspect, select
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from atlas.demo.seeder import get_or_create_workspace
 from atlas.domain import EntityType, SourceKind
-from atlas.models import Base, Entity, Evidence, Relationship, SecretEvent
+from atlas.models import (
+    Base,
+    Entity,
+    Evidence,
+    Relationship,
+    Scan,
+    ScanSnapshot,
+    SecretEvent,
+    Workspace,
+)
 from atlas.scanners.base import EntityCandidate
 from atlas.scanners.normalise import Normaliser
 from atlas.scanners.runner import run_scan
@@ -662,6 +671,31 @@ def test_repeated_bundle_imports_are_idempotent(session, tmp_path: Path) -> None
 # --------------------------------------------------------------------------- #
 # Review follow-ups
 # --------------------------------------------------------------------------- #
+def test_existing_database_gets_snapshot_table_without_losing_scans(tmp_path: Path) -> None:
+    from atlas import db as atlas_db
+
+    url = f"sqlite:///{(tmp_path / 'prior.sqlite3').as_posix()}"
+    old_engine = create_engine(url)
+    Base.metadata.create_all(old_engine, tables=[Workspace.__table__, Scan.__table__])
+    with old_engine.begin() as conn:
+        conn.execute(Workspace.__table__.insert().values(
+            id="workspace", name="Existing", slug="existing", description="",
+            is_demo=False,
+        ))
+        conn.execute(Scan.__table__.insert().values(
+            id="older", workspace_id="workspace", root_path="old", status="completed",
+        ))
+    old_engine.dispose()
+    try:
+        upgraded = atlas_db.init_db(url)
+        assert inspect(upgraded).has_table(ScanSnapshot.__tablename__)
+        with Session(upgraded) as session:
+            assert session.get(Scan, "older") is not None
+            assert session.get(ScanSnapshot, "older") is None
+    finally:
+        atlas_db.reset_engine()
+
+
 def test_migration_upgrades_populated_pre_change_database(tmp_path: Path) -> None:
     """A pre-change database is upgraded in place, preserving manual knowledge."""
     from atlas import db as atlas_db

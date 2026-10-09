@@ -49,6 +49,10 @@
           "path": "navigation-and-sharing.md"
         },
         {
+          "title": "Compare graph history",
+          "path": "historical-comparison.md"
+        },
+        {
           "title": "Security",
           "path": "security.md"
         },
@@ -92,6 +96,10 @@
         {
           "title": "Filtered diagram exports",
           "path": "adr/008-filtered-diagram-exports.md"
+        },
+        {
+          "title": "Scan graph checkpoints",
+          "path": "adr/009-scan-graph-checkpoints.md"
         }
       ]
     }

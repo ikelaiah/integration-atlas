@@ -10,6 +10,7 @@ import {
   ShieldOff,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { HistoryCompare } from "@/components/panels/HistoryCompare";
 import type { ScanDiff, ScanPreview, ScanProgress } from "@/lib/types";
 import { cn, formatNumber, relativeTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -175,6 +176,8 @@ export function ScansPage({
             )}
           </CardContent>
         </Card>
+
+        {!loading && <HistoryCompare workspaceId={workspaceId} scans={scans} />}
 
         <div className="mt-6">
           <div className="flex items-center gap-2">

@@ -3,6 +3,7 @@
 import type {
   EntityDetail,
   GraphResponse,
+  GraphComparison,
   Impact,
   Overview,
   PathResult,
@@ -14,6 +15,8 @@ import type {
   Environment,
   ScanPreview,
   ScanProgress,
+  ScanCheckpoint,
+  CheckpointPhase,
   SearchResponse,
   Traversal,
   Workspace,
@@ -122,6 +125,20 @@ export const api = {
     list: (workspaceId?: string) =>
       request<ScanProgress[]>(`/api/scans${qs({ workspace_id: workspaceId })}`),
     get: (id: string) => request<ScanProgress>(`/api/scans/${id}`),
+    checkpoints: (workspaceId: string, offset = 0) =>
+      request<ScanCheckpoint[]>(`/api/scans/checkpoints${qs({ workspace_id: workspaceId, offset })}`),
+    compare: (params: {
+      workspace_id: string;
+      from_scan_id: string;
+      from_phase: CheckpointPhase;
+      to_scan_id: string;
+      to_phase: CheckpointPhase;
+      kind?: "entity" | "relationship";
+      action?: "added" | "updated" | "removed";
+      q?: string;
+      offset?: number;
+      limit?: number;
+    }) => request<GraphComparison>(`/api/scans/compare${qs(params)}`),
     preview: (payload: { root_path: string; workspace_id: string }) =>
       request<ScanPreview>("/api/scans/preview", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),

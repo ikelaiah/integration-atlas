@@ -266,6 +266,47 @@ export interface ScanPreview {
   diff_summary: ScanDiff;
 }
 
+export type CheckpointPhase = "before" | "after";
+
+export interface ScanCheckpoint {
+  scan_id: string;
+  root_path: string;
+  started_at: string | null;
+  finished_at: string | null;
+  before_counts: Record<"entities" | "relationships", number>;
+  after_counts: Record<"entities" | "relationships", number>;
+}
+
+export interface HistoricalChange {
+  kind: "entity" | "relationship";
+  action: "added" | "updated" | "removed";
+  id: string;
+  name: string;
+  type: string;
+  changed_fields: string[];
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  before_name: string | null;
+  after_name: string | null;
+}
+
+export interface GraphComparison {
+  workspace_id: string;
+  from_scan_id: string;
+  from_phase: CheckpointPhase;
+  to_scan_id: string;
+  to_phase: CheckpointPhase;
+  from_counts: Record<"entities" | "relationships", number>;
+  to_counts: Record<"entities" | "relationships", number>;
+  counts: Record<"entities" | "relationships", Record<"added" | "updated" | "removed", number>>;
+  total: number;
+  filtered_total: number;
+  changes: HistoricalChange[];
+  offset: number;
+  limit: number;
+  truncated: boolean;
+}
+
 export interface ReviewPage {
   items: RelationshipDetail[];
   total: number;
