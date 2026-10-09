@@ -66,4 +66,12 @@
 - [x] Path explorer search, swap, direction and informative states
 - [x] Mermaid and PlantUML CLI and filtered web exports
 - [x] Operator docs, ADR, release notes and version 0.3.0
-- [ ] Full checks, review, CI, release and Pages verification
+- [x] Full checks, review, CI, release and Pages verification
+
+## v0.4.0 — Historical Graph Comparison
+
+- [x] Capture before/after checkpoints for applied API and CLI scans
+- [x] Compare ordered checkpoints with a bounded, secure API
+- [x] Add scan-history comparison controls and change detail
+- [x] Operator docs, ADR, release notes and version 0.4.0
+- [x] Full checks, review, CI, release and Pages verification

@@ -166,3 +166,16 @@ See [the v0.3.0 specification](v0.3.0-spec.md). Ship in four slices:
    CLI and filtered API. Verify escaping, redaction, counts and downloads.
 4. Polish the Atlas controls, document the workflow, check the full stack,
    review, merge after CI and verify the v0.3.0 release and Pages site.
+
+## v0.4.0 — Historical Graph Comparison
+
+See [the v0.4.0 specification](v0.4.0-spec.md). Ship in four slices:
+
+1. Capture compact before/after graph checkpoints with applied scans, including
+   CLI scans; verify preview rollback and existing-database compatibility.
+2. Compare ordered checkpoints with exact totals and bounded changes. Test
+   net changes, legacy scans, workspace isolation and redaction.
+3. Add a scan-history comparison UI with useful defaults, filters and old/new
+   field detail; verify the frontend build and local demo flow.
+4. Document behavior, bump version, review and verify the full stack, then
+   merge after CI and verify release and Pages.

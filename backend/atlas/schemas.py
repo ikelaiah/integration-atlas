@@ -8,7 +8,7 @@ persistence layer can evolve without breaking clients.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -357,6 +357,45 @@ class ScanProgress(BaseModel):
 class ScanPreview(BaseModel):
     scanner_summary: dict[str, Any]
     diff_summary: dict[str, Any]
+
+
+class ScanCheckpointOut(BaseModel):
+    scan_id: str
+    root_path: str
+    started_at: datetime | None
+    finished_at: datetime | None
+    before_counts: dict[str, int]
+    after_counts: dict[str, int]
+
+
+class HistoricalChange(BaseModel):
+    kind: Literal["entity", "relationship"]
+    action: Literal["added", "updated", "removed"]
+    id: str
+    name: str
+    type: str
+    changed_fields: list[str]
+    before: dict[str, Any] | None
+    after: dict[str, Any] | None
+    before_name: str | None
+    after_name: str | None
+
+
+class GraphComparisonOut(BaseModel):
+    workspace_id: str
+    from_scan_id: str
+    from_phase: Literal["before", "after"]
+    to_scan_id: str
+    to_phase: Literal["before", "after"]
+    from_counts: dict[str, int]
+    to_counts: dict[str, int]
+    counts: dict[str, dict[str, int]]
+    total: int
+    filtered_total: int
+    changes: list[HistoricalChange]
+    offset: int
+    limit: int
+    truncated: bool
 
 
 # --------------------------------------------------------------------------- #

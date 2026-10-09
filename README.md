@@ -138,8 +138,10 @@ the workspace. Choose **Apply scan** to scan the current files and save the
 actual result in scan history. Open **Review** to inspect relationship evidence
 and confirm or reject discoveries. Select an entity in **Atlas** and choose
 **Edit** to correct its description, owner, technology, location or environment.
-These manual fields and review verdicts survive later rescans. See the
-[review workflow](docs/review-workflow.md) for a guided example.
+These manual fields and review verdicts survive later rescans. Compare saved
+graph states in **Compare graph history** to understand the net changes across
+scans. See the [review workflow](docs/review-workflow.md) and
+[comparison guide](docs/historical-comparison.md) for guided examples.
 
 ### 🎨 Frontend development
 
@@ -280,7 +282,8 @@ and an evidence-backed relationship review queue.
 **v0.3.0** 🟢 — combined graph filters, full-workspace path search with
 influence direction, and filtered Mermaid/PlantUML diagram export.
 
-**Next** 🟡 — historical graph comparison.
+**v0.4.0** 🟢 — before/after graph checkpoints for applied scans, with
+cross-scan net comparison and field-level change detail.
 
 **Phase 3** 🔵 — SQL Server Agent scheduler exports, GitHub Actions and Azure
 Automation workflow exports, PostgreSQL storage, team collaboration, and
