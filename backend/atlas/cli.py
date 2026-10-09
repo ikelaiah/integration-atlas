@@ -255,7 +255,7 @@ def export(
     output: Annotated[Path, typer.Option("--out", "-o", help="Output file.")] = Path(
         "atlas-export.json"
     ),
-    fmt: Annotated[str, typer.Option("--format", "-f", help="json|csv|graphml")] = "json",
+    fmt: Annotated[str, typer.Option("--format", "-f", help="json|csv|graphml|mermaid|plantuml")] = "json",
     workspace: Annotated[
         str | None, typer.Option("--workspace", "-w", help="Workspace slug or id.")
     ] = None,

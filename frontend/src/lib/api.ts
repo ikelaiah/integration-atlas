@@ -10,6 +10,8 @@ import type {
   RiskFinding,
   ReviewPage,
   ReviewStatus,
+  RelationshipType,
+  Environment,
   ScanPreview,
   ScanProgress,
   SearchResponse,
@@ -64,8 +66,14 @@ export const api = {
       ),
   },
 
-  graph: (workspaceId: string, params: { entity_type?: string[]; min_confidence?: string; environment?: string[]; limit?: number } = {}) =>
+  graph: (workspaceId: string, params: { entity_type?: string[]; min_confidence?: string; environment?: Environment[]; relationship_type?: RelationshipType[]; review_status?: ReviewStatus[]; q?: string; limit?: number } = {}) =>
     request<GraphResponse>(`/api/graph${qs({ workspace_id: workspaceId, ...params })}`),
+
+  graphExport: async (workspaceId: string, format: "mermaid" | "plantuml", params: { entity_type?: string[]; min_confidence?: string; environment?: Environment[]; relationship_type?: RelationshipType[]; review_status?: ReviewStatus[]; q?: string; limit?: number } = {}) => {
+    const response = await fetch(`/api/graph/export${qs({ workspace_id: workspaceId, format, ...params })}`);
+    if (!response.ok) throw new Error(`${response.status}: Diagram export failed`);
+    return response.text();
+  },
 
   entity: (id: string) => request<EntityDetail>(`/api/entities/${id}`),
   updateEntity: (id: string, payload: Partial<Pick<EntityDetail, "description" | "owner" | "environment" | "location" | "technology">>) =>

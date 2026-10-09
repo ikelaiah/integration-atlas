@@ -293,6 +293,99 @@ def test_path_endpoint(client, session) -> None:
     assert payload["steps"][-1]["entity"]["id"] == csv.id
 
 
+def test_graph_combined_filters_keep_workspace_facets(client, session) -> None:
+    workspace = get_or_create_workspace(session, "Filter API")
+    nodes = [
+        Entity(workspace_id=workspace.id, entity_type="system", name="Source One",
+               fingerprint="source-one", environment="production", confidence="high"),
+        Entity(workspace_id=workspace.id, entity_type="script", name="Export Job",
+               fingerprint="export-job", environment="production", confidence="medium"),
+        Entity(workspace_id=workspace.id, entity_type="system", name="Other",
+               fingerprint="other", environment="test", confidence="low"),
+    ]
+    session.add_all(nodes)
+    session.flush()
+    session.add_all([
+        Relationship(workspace_id=workspace.id, source_id=nodes[0].id,
+                     target_id=nodes[1].id, relationship_type="produces",
+                     confidence="high", review_status="confirmed", fingerprint="a-b"),
+        Relationship(workspace_id=workspace.id, source_id=nodes[1].id,
+                     target_id=nodes[2].id, relationship_type="calls",
+                     confidence="low", review_status="rejected", fingerprint="b-c"),
+    ])
+    session.commit()
+
+    filtered = client.get(
+        f"/api/graph?workspace_id={workspace.id}&environment=production"
+        "&relationship_type=produces&review_status=confirmed&q=job"
+    )
+    assert filtered.status_code == 200, filtered.text
+    payload = filtered.json()
+    assert {node["name"] for node in payload["nodes"]} == {"Export Job", "Source One"}
+    assert [edge["relationship_type"] for edge in payload["edges"]] == ["produces"]
+    assert payload["facets"]["entity_type"] == {"system": 2, "script": 1}
+    assert payload["facets"]["review_status"]["rejected"] == 1
+    assert payload["facets"]["relationship_type"] == {"produces": 1, "calls": 1}
+
+    rejected = client.get(
+        f"/api/graph?workspace_id={workspace.id}&review_status=rejected"
+    ).json()
+    assert [edge["relationship_type"] for edge in rejected["edges"]] == ["calls"]
+    assert len(rejected["nodes"]) == 2
+    default = client.get(f"/api/graph?workspace_id={workspace.id}").json()
+    assert all(edge["review_status"] != "rejected" for edge in default["edges"])
+
+    selected = client.get(
+        f"/api/graph?workspace_id={workspace.id}&environment=production"
+        "&relationship_type=produces&review_status=confirmed"
+    ).json()
+    diagram = client.get(
+        f"/api/graph/export?workspace_id={workspace.id}&format=mermaid"
+        "&environment=production&relationship_type=produces&review_status=confirmed"
+    )
+    assert diagram.status_code == 200, diagram.text
+    assert "attachment" in diagram.headers["content-disposition"]
+    assert f"nodes={len(selected['nodes'])} edges={len(selected['edges'])}" in diagram.text
+    assert "Source One" in diagram.text and "Export Job" in diagram.text
+    assert "Other" not in diagram.text
+
+    bounded = client.get(
+        f"/api/graph?workspace_id={workspace.id}&relationship_type=produces&limit=1"
+    ).json()
+    bounded_diagram = client.get(
+        f"/api/graph/export?workspace_id={workspace.id}"
+        "&relationship_type=produces&limit=1"
+    )
+    assert bounded["truncated"] is True
+    assert len(bounded["nodes"]) == 1 and bounded["edges"] == []
+    assert "nodes=1 edges=0" in bounded_diagram.text
+    assert "truncated" in bounded_diagram.text
+
+
+def test_path_reports_influence_mode(client, session) -> None:
+    workspace = get_or_create_workspace(session, "Path modes")
+    nodes = [
+        Entity(workspace_id=workspace.id, entity_type="system", name=name, fingerprint=name)
+        for name in ("A", "B", "C")
+    ]
+    session.add_all(nodes)
+    session.flush()
+    session.add_all([
+        Relationship(workspace_id=workspace.id, source_id=nodes[0].id,
+                     target_id=nodes[1].id, relationship_type="produces", fingerprint="a-b"),
+        Relationship(workspace_id=workspace.id, source_id=nodes[2].id,
+                     target_id=nodes[1].id, relationship_type="produces", fingerprint="c-b"),
+    ])
+    session.commit()
+    def path(a: int, b: int) -> dict:
+        return client.get(
+            f"/api/path?workspace_id={workspace.id}&source_id={nodes[a].id}&target_id={nodes[b].id}"
+        ).json()
+    assert path(0, 1)["mode"] == "downstream"
+    assert path(1, 0)["mode"] == "upstream"
+    assert path(0, 2)["mode"] == "connected"
+
+
 def test_relationship_review_endpoint(client, session) -> None:
     workspace = get_or_create_workspace(session, "Review API")
     run_scan(session, workspace, EXAMPLES)

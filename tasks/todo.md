@@ -58,4 +58,12 @@
 - [x] Scan preview/apply and review queue UI
 - [x] Entity edit form and refreshed graph/detail state
 - [x] Operator docs, release notes and version 0.2.0
-- [ ] Backend and frontend checks, code review, CI, release and Pages verification
+- [x] Backend and frontend checks, code review, CI, release and Pages verification
+
+## v0.3.0 — Navigate and Share
+
+- [x] Combined graph filters with stable facet counts and clear controls
+- [x] Path explorer search, swap, direction and informative states
+- [x] Mermaid and PlantUML CLI and filtered web exports
+- [x] Operator docs, ADR, release notes and version 0.3.0
+- [ ] Full checks, review, CI, release and Pages verification

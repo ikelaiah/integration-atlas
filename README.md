@@ -191,8 +191,17 @@ atlas status                       # workspace and estate totals
 atlas impact StudentID             # what breaks if this changes?
 atlas impact --json StudentID      # machine-readable
 atlas export -f json -o out.json   # json | csv | graphml
+atlas export -f mermaid -o atlas.mmd  # Mermaid diagram
+atlas export -f plantuml -o atlas.puml # PlantUML diagram
 atlas serve                        # start the web application
 ```
+
+In **Atlas**, combine node type, environment, confidence, relationship type,
+review status and text search to narrow the graph. **Find path** searches the
+whole active workspace and explains the direction of influence. Use **Export**
+to download the filtered graph as Mermaid or PlantUML. The
+[navigation and sharing guide](docs/navigation-and-sharing.md) walks through
+the Northstar example.
 
 ## 🔍 Supported scanners
 
@@ -221,7 +230,7 @@ backend/atlas/
 
 frontend/src/       React + TypeScript + Tailwind + React Flow
 examples/           realistic artefacts to point a scan at
-tests/              93 tests with real fixtures
+tests/              regression and end-to-end tests with real fixtures
 docs/               architecture, domain model, security, ADRs
 ```
 
@@ -268,8 +277,10 @@ impact analysis, risk engine, demo estate.
 **v0.2.0** 🟢 — scan preview and actual diff history, manual entity editing,
 and an evidence-backed relationship review queue.
 
-**Next** 🟡 — advanced graph filtering, path explorer polish,
-Mermaid/PlantUML export and historical graph comparison.
+**v0.3.0** 🟢 — combined graph filters, full-workspace path search with
+influence direction, and filtered Mermaid/PlantUML diagram export.
+
+**Next** 🟡 — historical graph comparison.
 
 **Phase 3** 🔵 — SQL Server Agent scheduler exports, GitHub Actions and Azure
 Automation workflow exports, PostgreSQL storage, team collaboration, and

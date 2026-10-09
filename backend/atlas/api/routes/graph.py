@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+from collections import Counter
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from atlas.api.serialisers import edge_dict, graph_node_dict, node_dict
 from atlas.db import get_db
-from atlas.domain import Confidence, EntityType, Environment
+from atlas.domain import Confidence, EntityType, Environment, RelationshipType, ReviewStatus
 from atlas.models import Entity, Relationship, Workspace
 from atlas.schemas import GraphOut, ImpactOut, PathOut, SearchOut, TraversalOut
+from atlas.services.diagrams import DiagramEdge, DiagramNode, render_diagram
 from atlas.services.graph import GraphIndex
 from atlas.services.impact import analyse_impact, impact_to_dict
 from atlas.services.search import search_entities
@@ -37,25 +42,61 @@ def _filter_index(
     entity_types: list[EntityType] | None,
     min_confidence: Confidence | None,
     environments: list[Environment] | None,
+    relationship_types: list[RelationshipType] | None = None,
+    review_statuses: list[ReviewStatus] | None = None,
+    q: str = "",
+    include_rejected: bool = False,
 ) -> GraphIndex:
-    if not entity_types and not min_confidence and not environments:
-        return index
     allowed = set(entity_types or [])
     allowed_env = set(environments or [])
+    allowed_rel = set(relationship_types or [])
+    allowed_review = set(review_statuses or [])
     threshold = min_confidence.rank if min_confidence else 0
+    needle = q.strip().casefold()
 
-    keep = {
+    eligible = {
         eid
         for eid, entity in index.nodes.items()
         if (not allowed or EntityType(entity.entity_type) in allowed)
         and (not allowed_env or Environment(entity.environment) in allowed_env)
         and Confidence(entity.confidence).rank >= threshold
     }
-    entities = [e for eid, e in index.nodes.items() if eid in keep]
     relationships = [
-        r for r in index.edges if r.source_id in keep and r.target_id in keep
+        r for r in index.edges if r.source_id in eligible and r.target_id in eligible
+        and (not allowed_rel or r.relationship_type in allowed_rel)
+        and (r.review_status in allowed_review if allowed_review else
+             include_rejected or r.review_status != ReviewStatus.REJECTED.value)
     ]
-    return GraphIndex(entities, relationships, include_rejected=index.include_rejected)  # type: ignore[arg-type]
+    edge_filter_active = bool(allowed_rel or allowed_review)
+    if needle:
+        matching = {
+            eid for eid in eligible
+            if any(needle in str(value).casefold() for value in (
+                index.nodes[eid].name, index.nodes[eid].qualified_name,
+                index.nodes[eid].technology, index.nodes[eid].owner,
+            ))
+        }
+        keep = set(matching)
+        if edge_filter_active:
+            for edge in relationships:
+                if edge.source_id in matching or edge.target_id in matching:
+                    keep.update((edge.source_id, edge.target_id))
+    elif edge_filter_active:
+        keep = {eid for edge in relationships for eid in (edge.source_id, edge.target_id)}
+    else:
+        keep = eligible
+    entities = [e for eid, e in index.nodes.items() if eid in keep]
+    relationships = [r for r in relationships if r.source_id in keep and r.target_id in keep]
+    return GraphIndex(entities, relationships, include_rejected=True)  # type: ignore[arg-type]
+
+
+def _facets(index: GraphIndex) -> dict[str, dict[str, int]]:
+    return {
+        "entity_type": dict(Counter(e.entity_type for e in index.nodes.values())),
+        "environment": dict(Counter(e.environment for e in index.nodes.values())),
+        "relationship_type": dict(Counter(r.relationship_type.value for r in index.edges)),
+        "review_status": dict(Counter(r.review_status for r in index.edges)),
+    }
 
 
 @router.get("/graph", response_model=GraphOut)
@@ -64,16 +105,23 @@ def get_graph(
     entity_type: list[EntityType] | None = Query(None),
     min_confidence: Confidence | None = None,
     environment: list[Environment] | None = Query(None),
+    relationship_type: list[RelationshipType] | None = Query(None),
+    review_status: list[ReviewStatus] | None = Query(None),
+    q: str = Query("", max_length=200),
     include_rejected: bool = False,
-    limit: int = Query(2000, le=20000),
+    limit: int = Query(2000, ge=1, le=20000),
     db: Session = Depends(get_db),
 ) -> GraphOut:
-    index = _load_index(db, workspace_id, include_rejected=include_rejected)
+    all_index = _load_index(db, workspace_id, include_rejected=True)
     index = _filter_index(
-        index,
+        all_index,
         entity_types=entity_type,
         min_confidence=min_confidence,
         environments=environment,
+        relationship_types=relationship_type,
+        review_statuses=review_status,
+        q=q,
+        include_rejected=include_rejected,
     )
 
     nodes = [
@@ -101,6 +149,41 @@ def get_graph(
         edges=edges,
         truncated=truncated,
         totals=totals,
+        facets=_facets(all_index),
+    )
+
+
+@router.get("/graph/export", response_class=Response)
+def export_graph(
+    workspace_id: str = Query(...),
+    format: Literal["mermaid", "plantuml"] = "mermaid",
+    entity_type: list[EntityType] | None = Query(None),
+    min_confidence: Confidence | None = None,
+    environment: list[Environment] | None = Query(None),
+    relationship_type: list[RelationshipType] | None = Query(None),
+    review_status: list[ReviewStatus] | None = Query(None),
+    q: str = Query("", max_length=200),
+    include_rejected: bool = False,
+    limit: int = Query(2000, ge=1, le=20000),
+    db: Session = Depends(get_db),
+) -> Response:
+    graph = get_graph(
+        workspace_id=workspace_id, entity_type=entity_type,
+        min_confidence=min_confidence, environment=environment,
+        relationship_type=relationship_type, review_status=review_status,
+        q=q, include_rejected=include_rejected, limit=limit, db=db,
+    )
+    body = render_diagram(
+        [DiagramNode(node.id, node.name, node.entity_type.value) for node in graph.nodes],
+        [DiagramEdge(edge.flow_from, edge.flow_to, edge.relationship_type.value)
+         for edge in graph.edges],
+        fmt=format, truncated=graph.truncated,
+    )
+    suffix = "mmd" if format == "mermaid" else "puml"
+    return Response(
+        content=body,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="integration-atlas.{suffix}"'},
     )
 
 
@@ -164,6 +247,7 @@ def find_path(
     if not result.found:
         return PathOut(
             found=False,
+            mode="none",
             from_entity=node_dict(source),
             to_entity=node_dict(target),
         )
@@ -179,6 +263,7 @@ def find_path(
         )
     return PathOut(
         found=True,
+        mode=result.mode,
         from_entity=node_dict(source),
         to_entity=node_dict(target),
         steps=steps,

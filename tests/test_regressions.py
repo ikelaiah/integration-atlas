@@ -171,6 +171,38 @@ def test_export_never_carries_a_secret(session, tmp_path: Path) -> None:
     assert META_SECRET not in text
 
 
+@pytest.mark.parametrize("fmt,header", [("mermaid", "flowchart LR"), ("plantuml", "@startuml")])
+def test_diagram_exports_escape_untrusted_labels_and_skip_rejected(
+    session, tmp_path: Path, fmt: str, header: str
+) -> None:
+    from atlas.services.exporters import export_workspace
+
+    workspace = get_or_create_workspace(session, "Diagram Secret")
+    nodes = [
+        Entity(workspace_id=workspace.id, entity_type="system",
+               name='Source"]\n@startuml\npassword=SyntheticSecret123', fingerprint="diagram-a"),
+        Entity(workspace_id=workspace.id, entity_type="system", name="Target", fingerprint="diagram-b"),
+    ]
+    session.add_all(nodes)
+    session.flush()
+    session.add_all([
+        Relationship(workspace_id=workspace.id, source_id=nodes[0].id,
+                     target_id=nodes[1].id, relationship_type="produces",
+                     fingerprint="diagram-link", review_status="proposed"),
+        Relationship(workspace_id=workspace.id, source_id=nodes[1].id,
+                     target_id=nodes[0].id, relationship_type="calls",
+                     fingerprint="diagram-rejected", review_status="rejected"),
+    ])
+    session.flush()
+    out = export_workspace(session, workspace, tmp_path / f"diagram.{fmt}", fmt=fmt)
+    text = out.read_text(encoding="utf-8")
+    assert header in text
+    assert "SyntheticSecret123" not in text
+    assert "nodes=2 edges=1" in text
+    assert "Source&quot;] @startuml" in text
+    assert "calls" not in text
+
+
 # --------------------------------------------------------------------------- #
 # Issue 2 — allowlisted keys suppress nearby secret detection
 # --------------------------------------------------------------------------- #

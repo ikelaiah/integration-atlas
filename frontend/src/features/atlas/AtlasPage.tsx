@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Download,
   Filter,
-  GitBranch,
   Loader2,
   Maximize2,
   Minus,
@@ -14,20 +14,22 @@ import {
   X,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import type { GraphEdge, GraphNode, Impact, PathResult, RiskFinding } from "@/lib/types";
+import type { Environment, GraphEdge, GraphNode, GraphResponse, Impact, PathResult, RelationshipType, ReviewStatus, RiskFinding } from "@/lib/types";
 import {
   CONFIDENCE_META,
   ENTITY_TYPE_ORDER,
+  RELATIONSHIP_META,
   entityVisual,
 } from "@/lib/entity-visuals";
 import { cn, formatNumber } from "@/lib/utils";
 import { AtlasGraph, GraphLegend, type GraphHighlight } from "@/components/graph/AtlasGraph";
 import { EntityPanel } from "@/components/panels/EntityPanel";
 import { ImpactPanel, PathExplorer } from "@/components/panels/ImpactPanel";
+import { PathFinderDialog } from "@/components/panels/PathFinderDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Separator, EmptyState, Kbd } from "@/components/ui/misc";
+import { Separator, EmptyState } from "@/components/ui/misc";
 
 type SidePanel =
   | { kind: "entity"; id: string }
@@ -46,8 +48,16 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
   const [panel, setPanel] = useState<SidePanel>(null);
 
   const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
+  const [environmentFilter, setEnvironmentFilter] = useState<Set<Environment>>(new Set());
+  const [relationshipFilter, setRelationshipFilter] = useState<Set<RelationshipType>>(new Set());
+  const [reviewFilter, setReviewFilter] = useState<Set<ReviewStatus>>(new Set());
   const [minConfidence, setMinConfidence] = useState<string>("");
   const [searchFilter, setSearchFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [facets, setFacets] = useState<GraphResponse["facets"]>({ entity_type: {}, environment: {}, relationship_type: {}, review_status: {} });
+  const [graphTruncated, setGraphTruncated] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [showMeta, setShowMeta] = useState(true);
   const [showMinimap, setShowMinimap] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -56,29 +66,77 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
   const [impactLoading, setImpactLoading] = useState(false);
   const [pathResult, setPathResult] = useState<PathResult | null>(null);
   const [pathLoading, setPathLoading] = useState(false);
+  const [pathError, setPathError] = useState<string | null>(null);
+  const [pathFinderOpen, setPathFinderOpen] = useState(false);
 
   const [fitSignal, setFitSignal] = useState(0);
   const [focusSignal, setFocusSignal] = useState<{ id: string; zoom?: number } | undefined>();
+  const requestSeq = useRef(0);
+  const pathSeq = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchQuery(searchFilter.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchFilter]);
+
+  const graphFilters = useMemo(() => ({
+    entity_type: typeFilter.size ? [...typeFilter] : undefined,
+    min_confidence: minConfidence || undefined,
+    environment: environmentFilter.size ? [...environmentFilter] : undefined,
+    relationship_type: relationshipFilter.size ? [...relationshipFilter] : undefined,
+    review_status: reviewFilter.size ? [...reviewFilter] : undefined,
+    q: searchQuery || undefined,
+  }), [typeFilter, minConfidence, environmentFilter, relationshipFilter, reviewFilter, searchQuery]);
+
+  const clearFilters = () => {
+    setTypeFilter(new Set());
+    setEnvironmentFilter(new Set());
+    setRelationshipFilter(new Set());
+    setReviewFilter(new Set());
+    setMinConfidence("");
+    setSearchFilter("");
+  };
+
+  const filterCount = typeFilter.size + environmentFilter.size + relationshipFilter.size + reviewFilter.size
+    + (minConfidence ? 1 : 0) + (searchFilter ? 1 : 0);
+
+  const downloadDiagram = async (format: "mermaid" | "plantuml") => {
+    if (!workspaceId) return;
+    setExportOpen(false);
+    setExportError(null);
+    try {
+      const content = await api.graphExport(workspaceId, format, graphFilters);
+      const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `integration-atlas.${format === "mermaid" ? "mmd" : "puml"}`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setExportError((err as Error).message);
+    }
+  };
 
   // ------------------------------------------------------------------ //
   // data
   // ------------------------------------------------------------------ //
   const loadGraph = useCallback(() => {
     if (!workspaceId) return;
+    const seq = ++requestSeq.current;
     setLoading(true);
     setError(null);
     api
-      .graph(workspaceId, {
-        entity_type: typeFilter.size ? [...typeFilter] : undefined,
-        min_confidence: minConfidence || undefined,
-      })
+      .graph(workspaceId, graphFilters)
       .then((res) => {
+        if (seq !== requestSeq.current) return;
         setNodes(res.nodes);
         setEdges(res.edges);
+        setFacets(res.facets);
+        setGraphTruncated(res.truncated);
       })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [workspaceId, typeFilter, minConfidence]);
+      .catch((err: Error) => { if (seq === requestSeq.current) setError(err.message); })
+      .finally(() => { if (seq === requestSeq.current) setLoading(false); });
+  }, [workspaceId, graphFilters]);
 
   useEffect(() => {
     loadGraph();
@@ -87,29 +145,21 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
   // ------------------------------------------------------------------ //
   // derived
   // ------------------------------------------------------------------ //
-  const typeCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const node of nodes) counts[node.entity_type] = (counts[node.entity_type] ?? 0) + 1;
-    return counts;
-  }, [nodes]);
-
+  const typeCounts = facets.entity_type;
   const visibleNodes = useMemo(() => {
-    const needle = searchFilter.trim().toLowerCase();
-    if (!needle) return nodes;
-    return nodes.filter(
-      (n) =>
-        n.name.toLowerCase().includes(needle) ||
-        n.qualified_name.toLowerCase().includes(needle) ||
-        n.technology.toLowerCase().includes(needle),
-    );
-  }, [nodes, searchFilter]);
-
-  const visibleIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
-
-  const visibleEdges = useMemo(
-    () => edges.filter((e) => visibleIds.has(e.flow_from) && visibleIds.has(e.flow_to)),
-    [edges, visibleIds],
-  );
+    if (panel?.kind !== "path" || !pathResult?.found) return nodes;
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    for (const step of pathResult.steps) byId.set(step.entity.id, step.entity);
+    return [...byId.values()];
+  }, [nodes, panel, pathResult]);
+  const visibleEdges = useMemo(() => {
+    if (panel?.kind !== "path" || !pathResult?.found) return edges;
+    const byId = new Map(edges.map((edge) => [edge.id, edge]));
+    for (const step of pathResult.steps) {
+      if (step.relationship) byId.set(step.relationship.id, step.relationship);
+    }
+    return [...byId.values()];
+  }, [edges, panel, pathResult]);
 
   // ------------------------------------------------------------------ //
   // highlight computation
@@ -127,10 +177,8 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
 
     if (panel?.kind === "path" && pathResult?.found) {
       const pathIds = new Set(pathResult.steps.map((s) => s.entity.id));
-      const edgeIds = new Set<string>();
-      for (const edge of edges) {
-        if (pathIds.has(edge.source_id) && pathIds.has(edge.target_id)) edgeIds.add(edge.id);
-      }
+      const edgeIds = new Set(pathResult.steps.flatMap((step) =>
+        step.relationship ? [step.relationship.id] : []));
       return {
         focusIds: pathIds,
         edgeIds,
@@ -185,21 +233,28 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
     [],
   );
 
-  // keyboard: Esc closes the panel
+  // Escape closes the topmost surface first.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (pathFinderOpen) {
+          setPathFinderOpen(false);
+          return;
+        }
+        if (exportOpen) {
+          setExportOpen(false);
+          return;
+        }
+        pathSeq.current += 1;
         setPanel(null);
         setSelectedId(null);
-        setPathFinderOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [pathFinderOpen, exportOpen]);
 
   // cross-page events dispatched from the top bar / command palette
-  const [pathFinderOpen, setPathFinderOpen] = useState(false);
   useEffect(() => {
     const onSelect = (event: Event) => {
       const id = (event as CustomEvent<string>).detail;
@@ -245,6 +300,7 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
             <Badge variant="subtle" size="xs">
               {formatNumber(visibleNodes.length)} nodes · {formatNumber(visibleEdges.length)} edges
             </Badge>
+            {graphTruncated && <Badge variant="warning" size="xs" title="The graph is capped at 2,000 nodes; exports use the same view.">Limited view</Badge>}
           </div>
 
           <div className="relative ml-2 w-[190px]">
@@ -271,21 +327,30 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
             onClick={() => setShowFilters((v) => !v)}
             className={cn(
               "inline-flex h-7 items-center gap-1.5 rounded-[5px] border px-2 text-[11.5px] transition-colors",
-              showFilters || typeFilter.size > 0 || minConfidence
+              showFilters || filterCount > 0
                 ? "border-accent/40 bg-accent-soft text-accent-strong"
                 : "border-line-strong text-ink-muted hover:text-ink hover:bg-surface-2",
             )}
           >
             <SlidersHorizontal className="h-3 w-3" />
             Filters
-            {(typeFilter.size > 0 || minConfidence) && (
+            {filterCount > 0 && (
               <span className="tabular rounded-[3px] bg-accent/25 px-1 text-[9px]">
-                {typeFilter.size + (minConfidence ? 1 : 0)}
+                {filterCount}
               </span>
             )}
           </button>
 
           <div className="ml-auto flex items-center gap-1">
+            <div className="relative">
+              <Button variant="outline" size="xs" disabled={loading || !workspaceId} onClick={() => setExportOpen((value) => !value)} aria-expanded={exportOpen} title="Download the filtered graph; a temporary path overlay is excluded">
+                <Download className="h-3 w-3" /> Export
+              </Button>
+              {exportOpen && <div className="absolute right-0 top-8 z-50 min-w-[150px] rounded-[6px] border border-line-strong bg-surface p-1 panel-shadow">
+                <button type="button" onClick={() => downloadDiagram("mermaid")} className="w-full rounded-[4px] px-2 py-1.5 text-left text-[11.5px] text-ink hover:bg-surface-2">Mermaid (.mmd)</button>
+                <button type="button" onClick={() => downloadDiagram("plantuml")} className="w-full rounded-[4px] px-2 py-1.5 text-left text-[11.5px] text-ink hover:bg-surface-2">PlantUML (.puml)</button>
+              </div>}
+            </div>
             <Button
               variant={showMeta ? "subtle" : "ghost"}
               size="xs"
@@ -319,9 +384,7 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
               onClick={() => {
                 setPanel(null);
                 setSelectedId(null);
-                setTypeFilter(new Set());
-                setMinConfidence("");
-                setSearchFilter("");
+                clearFilters();
                 setFitSignal((n) => n + 1);
               }}
             >
@@ -330,9 +393,11 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
           </div>
         </div>
 
+        {exportError && <div role="alert" className="border-b border-danger/30 bg-danger/10 px-3 py-1.5 text-[11px] text-danger">Export failed: {exportError}</div>}
+
         {/* filter drawer */}
         {showFilters && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface-2 px-3 py-2.5 fade-in">
+          <div className="flex max-h-[190px] flex-wrap items-center gap-2 overflow-y-auto border-b border-line bg-surface-2 px-3 py-2.5 fade-in">
             <div className="flex items-center gap-1.5">
               <Filter className="h-3 w-3 text-subtle" />
               <span className="text-[10px] uppercase tracking-[0.07em] text-subtle">Type</span>
@@ -344,6 +409,7 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
                 <button
                   key={type}
                   type="button"
+                  aria-pressed={active}
                   onClick={() =>
                     setTypeFilter((prev) => {
                       const next = new Set(prev);
@@ -374,6 +440,7 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
                 <button
                   key={key}
                   type="button"
+                  aria-pressed={minConfidence === key}
                   onClick={() => setMinConfidence(minConfidence === key ? "" : key)}
                   className={cn(
                     "rounded-[4px] border px-1.5 py-[3px] text-[10.5px] transition-colors",
@@ -387,16 +454,42 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
               ))}
             </div>
 
-            {(typeFilter.size > 0 || minConfidence) && (
+            <Separator orientation="vertical" className="mx-1 h-4" />
+            <span className="text-[10px] uppercase tracking-[0.07em] text-subtle">Environment</span>
+            {(["production", "test", "development", "unknown"] as Environment[])
+              .filter((value) => facets.environment[value])
+              .map((value) => <button key={value} type="button" aria-pressed={environmentFilter.has(value)}
+                onClick={() => setEnvironmentFilter((previous) => toggleSet(previous, value))}
+                className={filterChipClass(environmentFilter.has(value))}>
+                {value} <span className="tabular opacity-70">{facets.environment[value]}</span>
+              </button>)}
+
+            <Separator orientation="vertical" className="mx-1 h-4" />
+            <span className="text-[10px] uppercase tracking-[0.07em] text-subtle">Relationship</span>
+            {(Object.keys(facets.relationship_type) as RelationshipType[]).sort().map((value) =>
+              <button key={value} type="button" aria-pressed={relationshipFilter.has(value)}
+                onClick={() => setRelationshipFilter((previous) => toggleSet(previous, value))}
+                className={filterChipClass(relationshipFilter.has(value))}>
+                {RELATIONSHIP_META[value]?.label ?? value.replaceAll("_", " ")}
+                <span className="tabular opacity-70">{facets.relationship_type[value]}</span>
+              </button>)}
+
+            <Separator orientation="vertical" className="mx-1 h-4" />
+            <span className="text-[10px] uppercase tracking-[0.07em] text-subtle">Review</span>
+            {(["proposed", "confirmed", "rejected"] as ReviewStatus[]).map((value) =>
+              <button key={value} type="button" aria-pressed={reviewFilter.has(value)}
+                onClick={() => setReviewFilter((previous) => toggleSet(previous, value))}
+                className={filterChipClass(reviewFilter.has(value))}>
+                {value} <span className="tabular opacity-70">{facets.review_status[value] ?? 0}</span>
+              </button>)}
+
+            {filterCount > 0 && (
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={() => {
-                  setTypeFilter(new Set());
-                  setMinConfidence("");
-                }}
+                onClick={clearFilters}
               >
-                <RotateCcw className="h-3 w-3" /> Clear
+                <RotateCcw className="h-3 w-3" /> Clear all
               </Button>
             )}
           </div>
@@ -427,17 +520,13 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
             <div className="flex h-full items-center justify-center p-8">
               <EmptyState
                 icon={<Network className="h-6 w-6" />}
-                title="Nothing discovered yet"
-                description="Load the Northstar demo or run a scan to populate the atlas."
-                action={
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => api.workspaces.seedDemo().then(loadGraph)}
-                  >
-                    Load demo estate
-                  </Button>
-                }
+                title={Object.keys(facets.entity_type).length ? "No entities match these filters" : "Nothing discovered yet"}
+                description={Object.keys(facets.entity_type).length
+                  ? "Try clearing filters or widening your search."
+                  : "Load the Northstar demo or run a scan to populate the atlas."}
+                action={Object.keys(facets.entity_type).length
+                  ? <Button variant="outline" size="sm" onClick={clearFilters}>Clear all filters</Button>
+                  : <Button variant="default" size="sm" onClick={() => api.workspaces.seedDemo().then(loadGraph)}>Load demo estate</Button>}
               />
             </div>
           ) : (
@@ -542,8 +631,10 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
         <PathExplorer
           result={pathResult}
           loading={pathLoading}
-          candidates={nodes.slice(0, 20)}
+          error={pathError}
+          onEdit={() => setPathFinderOpen(true)}
           onClose={() => {
+            pathSeq.current += 1;
             setPanel(null);
             setPathResult(null);
           }}
@@ -555,162 +646,39 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
         />
       )}
 
-      <PathFinderInline
-        nodes={nodes}
+      <PathFinderDialog
+        workspaceId={workspaceId}
         open={pathFinderOpen}
         onClose={() => setPathFinderOpen(false)}
         onFind={(sourceId, targetId) => {
+          const seq = ++pathSeq.current;
           setPanel({ kind: "path", sourceId, targetId });
           setPathLoading(true);
           setPathResult(null);
+          setPathError(null);
           if (!workspaceId) return;
           api
             .path(workspaceId, sourceId, targetId)
-            .then((res) => setPathResult(res))
-            .catch(() => setPathResult(null))
-            .finally(() => setPathLoading(false));
+            .then((res) => { if (seq === pathSeq.current) setPathResult(res); })
+            .catch((err: Error) => { if (seq === pathSeq.current) setPathError(err.message); })
+            .finally(() => { if (seq === pathSeq.current) setPathLoading(false); });
         }}
       />
     </div>
   );
 }
 
-/** Compact path finder dialog used from the top bar. */
-export function PathFinderInline({
-  nodes,
-  open,
-  onClose,
-  onFind,
-}: {
-  nodes: GraphNode[];
-  open: boolean;
-  onClose: () => void;
-  onFind: (sourceId: string, targetId: string) => void;
-}) {
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [fromQuery, setFromQuery] = useState("");
-  const [toQuery, setToQuery] = useState("");
+function toggleSet<T>(previous: Set<T>, value: T): Set<T> {
+  const next = new Set(previous);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return next;
+}
 
-  if (!open) return null;
-
-  const matches = (query: string, exclude: string) =>
-    nodes
-      .filter(
-        (n) =>
-          n.id !== exclude &&
-          (n.name.toLowerCase().includes(query.toLowerCase()) ||
-            n.qualified_name.toLowerCase().includes(query.toLowerCase())),
-      )
-      .slice(0, 8);
-
-  return (
-    <div
-      className="fixed inset-0 z-[92] flex items-start justify-center bg-black/55 pt-[16vh]"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-[420px] rounded-[10px] border border-line-strong bg-surface p-4 float-shadow"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2">
-          <GitBranch className="h-4 w-4 text-accent-strong" />
-          <div className="text-[13px] font-semibold text-ink">Find dependency path</div>
-          <button onClick={onClose} className="ml-auto text-subtle hover:text-ink">
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-
-        <div className="mt-3 space-y-2.5">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.07em] text-subtle">From</div>
-            <Input
-              value={fromQuery}
-              onChange={(e) => {
-                setFromQuery(e.target.value);
-                setFrom("");
-              }}
-              placeholder="e.g. LegacySIS"
-              className="mt-1"
-            />
-            {fromQuery && !from && (
-              <div className="mt-1 max-h-[130px] overflow-y-auto rounded-[5px] border border-line">
-                {matches(fromQuery, to).map((node) => (
-                  <button
-                    key={node.id}
-                    type="button"
-                    onClick={() => {
-                      setFrom(node.id);
-                      setFromQuery(node.name);
-                    }}
-                    className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-surface-2"
-                  >
-                    <span
-                      className="h-[6px] w-[6px] rounded-full"
-                      style={{ backgroundColor: entityVisual(node.entity_type).color }}
-                    />
-                    <span className="truncate text-[11.5px] text-ink">{node.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.07em] text-subtle">To</div>
-            <Input
-              value={toQuery}
-              onChange={(e) => {
-                setToQuery(e.target.value);
-                setTo("");
-              }}
-              placeholder="e.g. EnrolmentPortal"
-              className="mt-1"
-            />
-            {toQuery && !to && (
-              <div className="mt-1 max-h-[130px] overflow-y-auto rounded-[5px] border border-line">
-                {matches(toQuery, from).map((node) => (
-                  <button
-                    key={node.id}
-                    type="button"
-                    onClick={() => {
-                      setTo(node.id);
-                      setToQuery(node.name);
-                    }}
-                    className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-surface-2"
-                  >
-                    <span
-                      className="h-[6px] w-[6px] rounded-full"
-                      style={{ backgroundColor: entityVisual(node.entity_type).color }}
-                    />
-                    <span className="truncate text-[11.5px] text-ink">{node.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center gap-2">
-          <Button
-            variant="default"
-            size="sm"
-            disabled={!from || !to}
-            onClick={() => {
-              onFind(from, to);
-              onClose();
-            }}
-          >
-            <GitBranch className="h-3 w-3" /> Find path
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <span className="ml-auto text-[10px] text-subtle">
-            <Kbd>esc</Kbd> to close
-          </span>
-        </div>
-      </div>
-    </div>
+function filterChipClass(active: boolean): string {
+  return cn(
+    "inline-flex items-center gap-1.5 rounded-[4px] border px-1.5 py-[3px] text-[10.5px] capitalize transition-colors",
+    active ? "border-accent/40 bg-accent-soft text-accent-strong"
+      : "border-line-strong text-ink-muted hover:text-ink",
   );
 }
