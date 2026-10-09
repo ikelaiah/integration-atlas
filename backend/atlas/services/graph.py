@@ -109,6 +109,7 @@ class PathResult:
     found: bool
     entity_ids: list[str] = field(default_factory=list)
     edges: list[Edge] = field(default_factory=list)
+    mode: str = "none"
 
 
 class GraphIndex:
@@ -252,17 +253,21 @@ class GraphIndex:
         if from_id not in self.nodes or to_id not in self.nodes:
             return PathResult(found=False)
         if from_id == to_id:
-            return PathResult(found=True, entity_ids=[from_id])
+            return PathResult(found=True, entity_ids=[from_id], mode="downstream")
 
         chain = self._bfs_path(from_id, to_id, "downstream", max_depth)
+        mode = "downstream"
         if chain is None:
             chain = self._bfs_path(from_id, to_id, "upstream", max_depth)
+            mode = "upstream"
         if chain is None:
             chain = self._bfs_path(from_id, to_id, "undirected", max_depth)
+            mode = "connected"
         if chain is None:
             return PathResult(found=False)
         return PathResult(
-            found=True, entity_ids=self._chain_entity_ids(from_id, to_id, chain), edges=chain
+            found=True, entity_ids=self._chain_entity_ids(from_id, to_id, chain),
+            edges=chain, mode=mode,
         )
 
     def _bfs_path(

@@ -45,6 +45,10 @@
           "path": "review-workflow.md"
         },
         {
+          "title": "Navigation and sharing",
+          "path": "navigation-and-sharing.md"
+        },
+        {
           "title": "Security",
           "path": "security.md"
         },
@@ -84,6 +88,10 @@
         {
           "title": "Scan preview and review",
           "path": "adr/007-scan-preview-and-review.md"
+        },
+        {
+          "title": "Filtered diagram exports",
+          "path": "adr/008-filtered-diagram-exports.md"
         }
       ]
     }

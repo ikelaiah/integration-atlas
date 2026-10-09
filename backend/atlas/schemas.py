@@ -190,6 +190,7 @@ class GraphOut(BaseModel):
     edges: list[GraphEdge]
     truncated: bool = False
     totals: dict[str, int] = Field(default_factory=dict)
+    facets: dict[str, dict[str, int]] = Field(default_factory=dict)
 
 
 class GraphQuery(BaseModel):
@@ -243,6 +244,7 @@ class ImpactOut(BaseModel):
 
 class PathOut(BaseModel):
     found: bool
+    mode: str = "none"
     from_entity: GraphNode | None = None
     to_entity: GraphNode | None = None
     steps: list[StepOut] = Field(default_factory=list)

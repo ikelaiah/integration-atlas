@@ -78,6 +78,12 @@ export interface GraphResponse {
   edges: GraphEdge[];
   truncated: boolean;
   totals: Record<string, number>;
+  facets: {
+    entity_type: Record<string, number>;
+    environment: Record<string, number>;
+    relationship_type: Record<string, number>;
+    review_status: Record<string, number>;
+  };
 }
 
 export interface EntityDetail extends GraphNode {
@@ -153,6 +159,7 @@ export interface Impact {
 
 export interface PathResult {
   found: boolean;
+  mode: "downstream" | "upstream" | "connected" | "none";
   from_entity: GraphNode | null;
   to_entity: GraphNode | null;
   steps: Step[];

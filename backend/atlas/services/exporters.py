@@ -22,9 +22,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from atlas.models import Entity, Evidence, Relationship, Workspace
+from atlas.services.diagrams import DiagramEdge, DiagramNode, render_diagram
+from atlas.services.graph import GraphIndex
 from atlas.services.redaction import redact, redact_value
 
-SUPPORTED = {"json", "csv", "graphml"}
+SUPPORTED = {"json", "csv", "graphml", "mermaid", "plantuml"}
 
 
 def _clean(value: object) -> object:
@@ -58,7 +60,15 @@ def export_workspace(
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    if fmt == "json":
+    if fmt in {"mermaid", "plantuml"}:
+        index = GraphIndex(entities, relationships)
+        output.write_text(render_diagram(
+            [DiagramNode(e.id, e.name, e.entity_type) for e in index.nodes.values()],
+            [DiagramEdge(r.flow_from, r.flow_to, r.relationship_type.value)
+             for r in index.edges],
+            fmt=fmt,
+        ), encoding="utf-8")
+    elif fmt == "json":
         _export_json(output, workspace, entities, relationships, evidence)
     elif fmt == "csv":
         _export_csv(output, workspace, entities, relationships, evidence)

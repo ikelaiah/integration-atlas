@@ -9,7 +9,7 @@ import {
   Route,
   X,
 } from "lucide-react";
-import type { Impact, PathResult, GraphNode } from "@/lib/types";
+import type { Impact, PathResult } from "@/lib/types";
 import { entityVisual, RELATIONSHIP_META, CONFIDENCE_META } from "@/lib/entity-visuals";
 import { cn, formatNumber } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -253,13 +253,16 @@ export function ImpactPanel({
 export function PathExplorer({
   result,
   loading,
+  error,
+  onEdit,
   onClose,
   onSelectEntity,
   className,
 }: {
   result: PathResult | null;
   loading: boolean;
-  candidates: GraphNode[];
+  error: string | null;
+  onEdit: () => void;
   onClose: () => void;
   onSelectEntity: (id: string) => void;
   className?: string;
@@ -285,12 +288,17 @@ export function PathExplorer({
             </div>
           )}
         </div>
-        <Button variant="ghost" size="iconSm" onClick={onClose}>
+        <Button variant="ghost" size="xs" onClick={onEdit}>Change</Button>
+        <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="Close path">
           <X className="h-3.5 w-3.5" />
         </Button>
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
+        {!loading && error && <div role="alert" className="rounded-[6px] border border-danger/30 bg-danger/10 p-3 text-[11px] text-danger">
+          Could not find a path: {error}
+          <div className="mt-2"><Button size="xs" variant="outline" onClick={onEdit}>Change endpoints</Button></div>
+        </div>}
         {loading && (
           <div className="flex items-center gap-2 text-[12px] text-muted">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Searching for a path…
@@ -302,14 +310,24 @@ export function PathExplorer({
             <Crosshair className="mx-auto h-5 w-5 text-subtle" />
             <div className="mt-2 text-[12px] font-medium text-ink">No path found</div>
             <p className="mt-1 text-[11px] leading-relaxed text-muted">
-              These two entities are not connected in the current graph. Try widening the
-              filters or confirming more relationships.
+              No active, non-rejected connection was found. Graph display filters do not
+              affect this search.
             </p>
+            <div className="mt-3"><Button size="xs" variant="outline" onClick={onEdit}>Change endpoints</Button></div>
           </div>
         )}
 
         {!loading && result?.found && (
           <div className="space-y-1">
+            <div className="mb-3 rounded-[6px] border border-line bg-surface-2 p-2.5">
+              <div className="text-[11px] font-medium capitalize text-ink">{result.mode} path · {result.length} relationships</div>
+              <p className="mt-1 text-[10.5px] leading-relaxed text-muted">
+                {result.mode === "downstream" ? "Influence can flow from the first entity to the second."
+                  : result.mode === "upstream" ? "Influence flows toward the first entity along this path."
+                    : "This connection mixes influence directions; it is not an end-to-end impact route."}
+              </p>
+              <p className="mt-1 text-[10px] text-subtle">Path nodes are shown on the graph even when filters hide them.</p>
+            </div>
             {result.steps.map((step, index) => {
               const visual = entityVisual(step.entity.entity_type);
               return (
@@ -322,6 +340,7 @@ export function PathExplorer({
                           ? RELATIONSHIP_META[step.relationship.relationship_type].arrow
                           : "related"}
                       </span>
+                      {step.relationship && <span className="text-[9.5px] text-subtle">· {step.relationship.confidence} confidence</span>}
                     </div>
                   )}
                   <button

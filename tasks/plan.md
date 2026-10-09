@@ -153,3 +153,16 @@ See [the v0.2.0 specification](v0.2.0-spec.md). Ship in four vertical slices:
    manual field survival, frontend type checking and production build.
 4. Update operator docs and version metadata; run full checks, review the diff,
    merge after CI, publish v0.2.0 and verify GitHub Pages deployment.
+
+## v0.3.0 — Navigate and Share
+
+See [the v0.3.0 specification](v0.3.0-spec.md). Ship in four slices:
+
+1. Extend graph filters and return stable workspace facets. Test combined
+   filters, rejected relationships and bounded results.
+2. Add directional path results and whole-workspace entity search in the path
+   dialog. Verify mode and no-path behavior with focused tests.
+3. Render Mermaid and PlantUML exports through one diagram service for the
+   CLI and filtered API. Verify escaping, redaction, counts and downloads.
+4. Polish the Atlas controls, document the workflow, check the full stack,
+   review, merge after CI and verify the v0.3.0 release and Pages site.
