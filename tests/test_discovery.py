@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from atlas.demo.seeder import get_or_create_workspace, run_risk_analysis
-from atlas.domain import EntityType
+from atlas.domain import EntityType, RelationshipType
 from atlas.models import (
     Base,
     Entity,
