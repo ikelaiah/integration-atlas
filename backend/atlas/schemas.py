@@ -245,6 +245,8 @@ class ImpactOut(BaseModel):
 class PathOut(BaseModel):
     found: bool
     mode: str = "none"
+    max_depth: int = 25
+    limit_reason: Literal["max_depth", "visit_budget"] | None = None
     from_entity: GraphNode | None = None
     to_entity: GraphNode | None = None
     steps: list[StepOut] = Field(default_factory=list)

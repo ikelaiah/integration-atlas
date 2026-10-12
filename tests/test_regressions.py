@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from atlas.demo.seeder import get_or_create_workspace
-from atlas.domain import EntityType, SourceKind
+from atlas.domain import EntityType, ScanStatus, SourceKind
 from atlas.models import (
     Base,
     Entity,
@@ -158,6 +158,44 @@ def test_api_writes_are_redacted(session, client) -> None:
     session.flush()
     assert SECRET not in _all_strings(session)
     assert META_SECRET not in _all_strings(session)
+
+
+def test_failed_scan_is_recorded_without_partial_graph_or_checkpoint(
+    session, client, monkeypatch, tmp_path: Path
+) -> None:
+    import atlas.scanners.runner
+
+    workspace = get_or_create_workspace(session, "Failed Scan")
+    before_ids = set(session.scalars(select(Entity.id).where(Entity.workspace_id == workspace.id)))
+
+    def fail_after_partial_discovery(db, target_workspace, root, *, scan=None):
+        normaliser = Normaliser(db, target_workspace)
+        normaliser.upsert_entity(
+            EntityCandidate(
+                entity_type=EntityType.SCRIPT,
+                name="partial-discovery.py",
+                qualified_name="partial-discovery.py",
+            )
+        )
+        db.flush()
+        raise RuntimeError(f"parser failed with password={SECRET}")
+
+    monkeypatch.setattr(atlas.scanners.runner, "run_scan", fail_after_partial_discovery)
+    response = client.post(
+        "/api/scans",
+        json={"workspace_id": workspace.id, "root_path": str(tmp_path)},
+    )
+
+    assert response.status_code == 500
+    assert SECRET not in response.text
+    scans = list(session.scalars(select(Scan).where(Scan.workspace_id == workspace.id)))
+    assert len(scans) == 1
+    assert scans[0].status == ScanStatus.FAILED.value
+    assert scans[0].finished_at is not None
+    assert scans[0].error and SECRET not in scans[0].error
+    after_ids = set(session.scalars(select(Entity.id).where(Entity.workspace_id == workspace.id)))
+    assert after_ids == before_ids
+    assert session.scalars(select(ScanSnapshot.scan_id)).all() == []
 
 
 def test_export_never_carries_a_secret(session, tmp_path: Path) -> None:

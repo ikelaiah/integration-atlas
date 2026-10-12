@@ -167,6 +167,40 @@ def test_path_not_found(student_index: GraphIndex) -> None:
     assert not index.find_path("col", "lone").found
 
 
+def test_path_depth_is_a_hop_limit() -> None:
+    entities = [FakeEntity(f"node-{i}", f"Node {i}", "script") for i in range(31)]
+    edges = [
+        make_edge(f"node-{i}", f"node-{i + 1}", RelationshipType.PRODUCES)
+        for i in range(30)
+    ]
+    index = GraphIndex(entities, edges)  # type: ignore[arg-type]
+
+    bounded = index.find_path("node-0", "node-30", max_depth=25)
+    assert not bounded.found
+    assert bounded.limit_reason == "max_depth"
+    assert bounded.max_depth == 25
+
+    deeper = index.find_path("node-0", "node-30", max_depth=30)
+    assert deeper.found
+    assert len(deeper.edges) == 30
+
+
+def test_path_visit_budget_is_reported_separately_from_depth() -> None:
+    entities = [FakeEntity(f"node-{i}", f"Node {i}", "script") for i in range(4)]
+    edges = [
+        make_edge("node-0", "node-1", RelationshipType.PRODUCES),
+        make_edge("node-1", "node-2", RelationshipType.PRODUCES),
+        make_edge("node-2", "node-3", RelationshipType.PRODUCES),
+    ]
+    index = GraphIndex(entities, edges)  # type: ignore[arg-type]
+
+    bounded = index.find_path("node-0", "node-3", max_depth=25, max_visits=1)
+
+    assert not bounded.found
+    assert bounded.limit_reason == "visit_budget"
+    assert bounded.max_depth == 25
+
+
 def test_degree_and_neighbours(student_index: GraphIndex) -> None:
     assert student_index.degree("csv") == 2
     assert set(student_index.neighbours("csv")) == {"ps1", "ident"}

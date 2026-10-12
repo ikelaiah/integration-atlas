@@ -235,6 +235,8 @@ def find_path(
     workspace_id: str = Query(...),
     source_id: str = Query(...),
     target_id: str = Query(...),
+    max_depth: int = Query(25, ge=1, le=100),
+    max_visits: int = Query(10_000, ge=1, le=50_000),
     db: Session = Depends(get_db),
 ) -> PathOut:
     index = _load_index(db, workspace_id)
@@ -243,11 +245,15 @@ def find_path(
     if source is None or target is None:
         raise HTTPException(status_code=404, detail="Entity not found")
 
-    result = index.find_path(source_id, target_id)
+    result = index.find_path(
+        source_id, target_id, max_depth=max_depth, max_visits=max_visits
+    )
     if not result.found:
         return PathOut(
             found=False,
             mode="none",
+            max_depth=result.max_depth,
+            limit_reason=result.limit_reason,
             from_entity=node_dict(source),
             to_entity=node_dict(target),
         )
@@ -264,6 +270,7 @@ def find_path(
     return PathOut(
         found=True,
         mode=result.mode,
+        max_depth=result.max_depth,
         from_entity=node_dict(source),
         to_entity=node_dict(target),
         steps=steps,

@@ -110,6 +110,8 @@ class PathResult:
     entity_ids: list[str] = field(default_factory=list)
     edges: list[Edge] = field(default_factory=list)
     mode: str = "none"
+    max_depth: int = 25
+    limit_reason: str | None = None
 
 
 class GraphIndex:
@@ -243,7 +245,14 @@ class GraphIndex:
         return TraversalResult(root_id=root_id, direction="both", steps=steps)
 
     # -- path finding ------------------------------------------------------- #
-    def find_path(self, from_id: str, to_id: str, *, max_depth: int = 25) -> PathResult:
+    def find_path(
+        self,
+        from_id: str,
+        to_id: str,
+        *,
+        max_depth: int = 25,
+        max_visits: int = 10_000,
+    ) -> PathResult:
         """Shortest influence path from ``from_id`` to ``to_id``.
 
         Falls back to the undirected graph so the user still gets an answer
@@ -251,23 +260,37 @@ class GraphIndex:
         the returned edges keep their true direction so the UI can say so.
         """
         if from_id not in self.nodes or to_id not in self.nodes:
-            return PathResult(found=False)
+            return PathResult(found=False, max_depth=max_depth)
         if from_id == to_id:
-            return PathResult(found=True, entity_ids=[from_id], mode="downstream")
+            return PathResult(
+                found=True, entity_ids=[from_id], mode="downstream", max_depth=max_depth
+            )
 
-        chain = self._bfs_path(from_id, to_id, "downstream", max_depth)
-        mode = "downstream"
-        if chain is None:
-            chain = self._bfs_path(from_id, to_id, "upstream", max_depth)
-            mode = "upstream"
-        if chain is None:
-            chain = self._bfs_path(from_id, to_id, "undirected", max_depth)
-            mode = "connected"
-        if chain is None:
-            return PathResult(found=False)
+        modes = (("downstream", "downstream"), ("upstream", "upstream"), ("undirected", "connected"))
+        remaining_visits = max_visits
+        budget_exhausted = False
+        for search_mode, result_mode in modes:
+            chain, visits, exhausted = self._bfs_path(
+                from_id, to_id, search_mode, max_depth, remaining_visits
+            )
+            remaining_visits -= visits
+            budget_exhausted = budget_exhausted or exhausted
+            if chain is not None:
+                return PathResult(
+                    found=True,
+                    entity_ids=self._chain_entity_ids(from_id, to_id, chain),
+                    edges=chain,
+                    mode=result_mode,
+                    max_depth=max_depth,
+                )
+            if remaining_visits <= 0 and search_mode != "undirected":
+                budget_exhausted = True
+                break
+
         return PathResult(
-            found=True, entity_ids=self._chain_entity_ids(from_id, to_id, chain),
-            edges=chain, mode=mode,
+            found=False,
+            max_depth=max_depth,
+            limit_reason="visit_budget" if budget_exhausted else "max_depth",
         )
 
     def _bfs_path(
@@ -276,24 +299,30 @@ class GraphIndex:
         to_id: str,
         mode: str,
         max_depth: int,
-    ) -> list[Edge] | None:
-        """BFS returning the edge chain, or ``None`` if unreachable."""
+        max_visits: int,
+    ) -> tuple[list[Edge] | None, int, bool]:
+        """Return the shortest bounded chain, visits used, and budget status."""
         parent: dict[str, tuple[str, Edge] | None] = {from_id: None}
-        queue: deque[str] = deque([from_id])
+        queue: deque[tuple[str, int]] = deque([(from_id, 0)])
         visited = 0
-        budget = max_depth * 400
-        while queue and visited < budget:
-            visited += 1
-            current = queue.popleft()
+        exhausted = False
+        while queue:
+            current, depth = queue.popleft()
             if current == to_id:
                 break
+            if depth >= max_depth:
+                continue
+            if visited >= max_visits:
+                exhausted = True
+                break
+            visited += 1
             for nxt, edge in self._step_edges(current, mode):
                 if nxt in parent:
                     continue
                 parent[nxt] = (current, edge)
-                queue.append(nxt)
+                queue.append((nxt, depth + 1))
         if to_id not in parent:
-            return None
+            return None, visited, exhausted
         chain: list[Edge] = []
         cursor = to_id
         while parent.get(cursor) is not None:
@@ -301,7 +330,7 @@ class GraphIndex:
             chain.append(edge)
             cursor = prev
         chain.reverse()
-        return chain
+        return chain, visited, exhausted
 
     def _step_edges(self, current: str, mode: str) -> list[tuple[str, Edge]]:
         out: list[tuple[str, Edge]] = []

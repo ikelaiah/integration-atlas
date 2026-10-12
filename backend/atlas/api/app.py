@@ -73,19 +73,26 @@ def _mount_frontend(app: FastAPI, static_dir: Path) -> None:
             )
         return
 
-    assets = static_dir / "assets"
+    static_root = static_dir.resolve()
+    assets = static_root / "assets"
     if assets.is_dir():
-        app.mount("/assets", StaticFiles(directory=assets), name="assets")
+        asset_root = assets.resolve()
+        if asset_root.is_relative_to(static_root):
+            app.mount("/assets", StaticFiles(directory=asset_root), name="assets")
 
-    index_file = static_dir / "index.html"
+    index_file = static_root / "index.html"
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa(full_path: str, request: Request):  # type: ignore[no-untyped-def]
         if full_path.startswith("api/"):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
-        candidate = static_dir / full_path
-        if full_path and candidate.is_file():
-            return FileResponse(candidate)
+        if full_path:
+            try:
+                candidate = (static_root / full_path).resolve()
+            except (OSError, RuntimeError, ValueError):
+                candidate = None
+            if candidate is not None and candidate.is_relative_to(static_root) and candidate.is_file():
+                return FileResponse(candidate)
         return FileResponse(index_file)
 
 

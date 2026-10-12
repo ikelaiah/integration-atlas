@@ -398,6 +398,53 @@ def test_path_reports_influence_mode(client, session) -> None:
     assert path(0, 2)["mode"] == "connected"
 
 
+def test_path_api_reports_depth_and_visit_limits(client, session) -> None:
+    workspace = get_or_create_workspace(session, "Path limits")
+    nodes = [
+        Entity(
+            workspace_id=workspace.id,
+            entity_type=EntityType.SCRIPT.value,
+            name=f"path-node-{i}",
+            qualified_name=f"path-node-{i}",
+            fingerprint=f"path-node-{i}",
+        )
+        for i in range(31)
+    ]
+    session.add_all(nodes)
+    session.flush()
+    session.add_all(
+        Relationship(
+            workspace_id=workspace.id,
+            source_id=nodes[i].id,
+            target_id=nodes[i + 1].id,
+            relationship_type=RelationshipType.PRODUCES.value,
+            fingerprint=f"path-edge-{i}",
+        )
+        for i in range(30)
+    )
+    session.commit()
+    base = {
+        "workspace_id": workspace.id,
+        "source_id": nodes[0].id,
+        "target_id": nodes[-1].id,
+    }
+
+    depth_limited = client.get("/api/path", params={**base, "max_depth": 25}).json()
+    assert depth_limited["found"] is False
+    assert depth_limited["limit_reason"] == "max_depth"
+    assert depth_limited["max_depth"] == 25
+
+    deeper = client.get("/api/path", params={**base, "max_depth": 30}).json()
+    assert deeper["found"] is True
+    assert deeper["length"] == 30
+
+    budget_limited = client.get(
+        "/api/path", params={**base, "max_depth": 30, "max_visits": 1}
+    ).json()
+    assert budget_limited["found"] is False
+    assert budget_limited["limit_reason"] == "visit_budget"
+
+
 def test_relationship_review_endpoint(client, session) -> None:
     workspace = get_or_create_workspace(session, "Review API")
     run_scan(session, workspace, EXAMPLES)

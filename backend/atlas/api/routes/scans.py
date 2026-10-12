@@ -28,6 +28,7 @@ from atlas.schemas import (
     ScanProgress,
 )
 from atlas.services.history import compare_graphs
+from atlas.services.redaction import redact
 from atlas.services.scan_diff import compare, snapshot
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
@@ -194,9 +195,11 @@ def run_scan(payload: ScanCreate, db: Session = Depends(get_db)) -> ScanProgress
     )
     db.add(scan)
     db.flush()
+    scan_id = scan.id
 
     from atlas.scanners.runner import run_scan as run_discovery
 
+    attempt = db.begin_nested()
     try:
         summary = run_discovery(db, workspace, root, scan=scan)
         scan.diff_summary = compare(before, snapshot(db, workspace.id))
@@ -204,11 +207,24 @@ def run_scan(payload: ScanCreate, db: Session = Depends(get_db)) -> ScanProgress
         scan.scanner_summary = summary
         run_risk_analysis(db, workspace)
     except Exception as exc:  # noqa: BLE001 - surfaced to the operator
-        scan.status = ScanStatus.FAILED.value
-        scan.error = str(exc)[:2000]
-        raise HTTPException(status_code=500, detail=f"Scan failed: {exc}") from exc
-    finally:
+        attempt.rollback()
+        error = redact(str(exc)).text[:2000] or "Unexpected scan failure"
+        failed_scan = db.get(Scan, scan_id)
+        if failed_scan is None:
+            raise HTTPException(status_code=500, detail="Scan failed and its history could not be saved") from exc
+        failed_scan.status = ScanStatus.FAILED.value
+        failed_scan.error = error
+        failed_scan.scanner_summary = None
+        failed_scan.diff_summary = None
+        failed_scan.finished_at = datetime.now(UTC)
+        db.flush()
+        # Commit the failed attempt after the savepoint has removed partial graph
+        # changes. The dependency's rollback after this HTTP error cannot erase it.
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Scan failed: {error}") from exc
+    else:
         scan.finished_at = datetime.now(UTC)
+        attempt.commit()
         db.flush()
 
     return _progress(scan)
