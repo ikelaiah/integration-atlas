@@ -49,6 +49,8 @@ def edge_dict(edge: Edge) -> dict[str, Any]:
         "relationship_type": edge.relationship_type,
         "flow_from": edge.flow_from,
         "flow_to": edge.flow_to,
+        "influence_label": edge.relationship_type.influence_label,
+        "bidirectional": edge.is_bidirectional,
         "confidence": Confidence(edge.confidence),
         "review_status": ReviewStatus(edge.review_status),
         "label": edge.label,

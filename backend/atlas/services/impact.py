@@ -108,14 +108,38 @@ def impact_to_dict(index: GraphIndex, result: ImpactResult) -> dict:
             if index.nodes.get(item.entity_id) is not None
             and index.nodes[item.entity_id].entity_type == etype
         ]
+        returned_entities = entities[:50]
         groups.append(
             {
                 "entity_type": etype,
                 "label": EntityType(etype).label,
                 "count": count,
-                "entities": entities[:50],
+                "total": count,
+                "returned": len(returned_entities),
+                "omitted": count - len(returned_entities),
+                "entities": returned_entities,
             }
         )
+
+    analysis_ids = [result.root_id, *(item.entity_id for item in result.items)]
+    analysis_nodes = []
+    seen_nodes: set[str] = set()
+    for entity_id in analysis_ids:
+        if entity_id in seen_nodes or entity_id not in index.nodes:
+            continue
+        seen_nodes.add(entity_id)
+        node = node_dict(index.nodes[entity_id])
+        node["degree"] = index.degree(entity_id)
+        analysis_nodes.append(node)
+
+    analysis_edges = []
+    seen_edges: set[str] = set()
+    for item in result.items:
+        if item.via is None or item.via.id in seen_edges:
+            continue
+        seen_edges.add(item.via.id)
+        analysis_edges.append(_edge_dict(item.via))
+
     rollup = rollup_counts(index, result)
     return {
         "root": node_dict(index.nodes[result.root_id]),
@@ -123,6 +147,11 @@ def impact_to_dict(index: GraphIndex, result: ImpactResult) -> dict:
         "max_depth": result.max_depth,
         "total_affected": result.total,
         "groups": groups,
+        "analysis_subgraph": {
+            "nodes": analysis_nodes,
+            "edges": analysis_edges,
+            "truncated": result.truncated,
+        },
         "chains": [
             [
                 {
@@ -150,6 +179,8 @@ def _edge_dict(edge: Edge | None) -> dict | None:
         "relationship_type": edge.relationship_type.value,
         "flow_from": edge.flow_from,
         "flow_to": edge.flow_to,
+        "influence_label": edge.relationship_type.influence_label,
+        "bidirectional": edge.is_bidirectional,
         "confidence": edge.confidence,
         "review_status": edge.review_status,
         "label": edge.label,

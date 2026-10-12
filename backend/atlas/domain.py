@@ -106,6 +106,11 @@ class RelationshipType(str, Enum):
     def flow(self) -> Flow:
         return RELATIONSHIP_FLOW[self]
 
+    @property
+    def influence_label(self) -> str:
+        """Short verb to read from ``flow_from`` to ``flow_to`` in a diagram."""
+        return RELATIONSHIP_INFLUENCE_LABEL[self]
+
 
 _RELATIONSHIP_TYPE_LABELS: Final[dict[RelationshipType, str]] = {
     RelationshipType.READS_FROM: "Reads from",
@@ -155,6 +160,26 @@ RELATIONSHIP_FLOW: Final[dict[RelationshipType, Flow]] = {
     RelationshipType.USES_TABLE: Flow.REVERSE,
     RelationshipType.USES_COLUMN: Flow.REVERSE,
     RelationshipType.CONNECTS_TO: Flow.REVERSE,
+}
+
+# Labels describe influence direction, which can differ from the stored
+# source-to-target statement for reverse-flow relationships.
+RELATIONSHIP_INFLUENCE_LABEL: Final[dict[RelationshipType, str]] = {
+    RelationshipType.READS_FROM: "read by",
+    RelationshipType.WRITES_TO: "writes to",
+    RelationshipType.CALLS: "calls",
+    RelationshipType.RUNS: "run by",
+    RelationshipType.RUNS_ON: "hosts",
+    RelationshipType.DEPENDS_ON: "required by",
+    RelationshipType.PRODUCES: "produces",
+    RelationshipType.CONSUMES: "consumed by",
+    RelationshipType.TRANSFERS_TO: "transfers to",
+    RelationshipType.IMPORTS_FROM: "imported by",
+    RelationshipType.EXPORTS_TO: "exports to",
+    RelationshipType.TRIGGERS: "triggers",
+    RelationshipType.USES_TABLE: "used by",
+    RelationshipType.USES_COLUMN: "used by",
+    RelationshipType.CONNECTS_TO: "linked to",
 }
 
 

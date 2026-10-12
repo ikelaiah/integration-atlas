@@ -147,31 +147,38 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
   // ------------------------------------------------------------------ //
   const typeCounts = facets.entity_type;
   const visibleNodes = useMemo(() => {
+    if (panel?.kind === "impact" && impact) {
+      return impact.analysis_subgraph.nodes;
+    }
     if (panel?.kind !== "path" || !pathResult?.found) return nodes;
     const byId = new Map(nodes.map((node) => [node.id, node]));
     for (const step of pathResult.steps) byId.set(step.entity.id, step.entity);
     return [...byId.values()];
-  }, [nodes, panel, pathResult]);
+  }, [nodes, panel, pathResult, impact]);
   const visibleEdges = useMemo(() => {
+    if (panel?.kind === "impact" && impact) {
+      return impact.analysis_subgraph.edges;
+    }
     if (panel?.kind !== "path" || !pathResult?.found) return edges;
     const byId = new Map(edges.map((edge) => [edge.id, edge]));
     for (const step of pathResult.steps) {
       if (step.relationship) byId.set(step.relationship.id, step.relationship);
     }
     return [...byId.values()];
-  }, [edges, panel, pathResult]);
+  }, [edges, panel, pathResult, impact]);
 
   // ------------------------------------------------------------------ //
   // highlight computation
   // ------------------------------------------------------------------ //
   const highlight: GraphHighlight | null = useMemo(() => {
     if (panel?.kind === "impact" && impact) {
-      const impactIds = new Set(impact.groups.flatMap((g) => g.entities.map((e) => e.id)));
+      const impactIds = new Set(
+        impact.analysis_subgraph.nodes
+          .filter((node) => node.id !== impact.root.id)
+          .map((node) => node.id),
+      );
       const focusIds = new Set([impact.root.id, ...impactIds]);
-      const edgeIds = new Set<string>();
-      for (const edge of edges) {
-        if (focusIds.has(edge.source_id) && focusIds.has(edge.target_id)) edgeIds.add(edge.id);
-      }
+      const edgeIds = new Set(impact.analysis_subgraph.edges.map((edge) => edge.id));
       return { focusIds, edgeIds, impactIds, rootId: impact.root.id };
     }
 
@@ -577,9 +584,13 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
                 <span className="text-[11px] text-ink">
                   <span className="font-semibold">{impact.root.name}</span> can affect{" "}
                   <span className="font-semibold text-accent-strong">
+                    {impact.truncated ? "at least " : ""}
                     {formatNumber(impact.total_affected)}
                   </span>{" "}
                   entities
+                  <span className="hidden text-[9.5px] text-subtle md:inline">
+                    · {formatNumber(Math.max(0, impact.analysis_subgraph.nodes.length - 1))} mapped here; graph filters do not limit impact
+                  </span>
                 </span>
                 <Button variant="ghost" size="xs" onClick={() => { setPanel(null); setImpact(null); }}>
                   <X className="h-3 w-3" />

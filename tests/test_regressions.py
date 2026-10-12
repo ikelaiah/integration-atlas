@@ -234,10 +234,13 @@ def test_diagram_exports_escape_untrusted_labels_and_skip_rejected(
     session.flush()
     session.add_all([
         Relationship(workspace_id=workspace.id, source_id=nodes[0].id,
-                     target_id=nodes[1].id, relationship_type="produces",
+                     target_id=nodes[1].id, relationship_type="reads_from",
                      fingerprint="diagram-link", review_status="proposed"),
+        Relationship(workspace_id=workspace.id, source_id=nodes[0].id,
+                     target_id=nodes[1].id, relationship_type="calls",
+                     fingerprint="diagram-call", review_status="proposed"),
         Relationship(workspace_id=workspace.id, source_id=nodes[1].id,
-                     target_id=nodes[0].id, relationship_type="calls",
+                     target_id=nodes[0].id, relationship_type="writes_to",
                      fingerprint="diagram-rejected", review_status="rejected"),
     ])
     session.flush()
@@ -245,9 +248,15 @@ def test_diagram_exports_escape_untrusted_labels_and_skip_rejected(
     text = out.read_text(encoding="utf-8")
     assert header in text
     assert "SyntheticSecret123" not in text
-    assert "nodes=2 edges=1" in text
+    assert "nodes=2 edges=2" in text
     assert "Source&quot;] @startuml" in text
-    assert "calls" not in text
+    assert "read by" in text
+    assert "calls" in text
+    assert "writes to" not in text
+    if fmt == "mermaid":
+        assert "<-->|calls|" in text
+    else:
+        assert "<-->" in text
 
 
 # --------------------------------------------------------------------------- #

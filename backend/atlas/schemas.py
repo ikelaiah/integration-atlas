@@ -179,6 +179,8 @@ class GraphEdge(BaseModel):
     #: Influence direction, already resolved from the flow map.
     flow_from: str
     flow_to: str
+    influence_label: str
+    bidirectional: bool
     confidence: Confidence
     review_status: ReviewStatus
     label: str = ""
@@ -218,10 +220,19 @@ class TraversalOut(BaseModel):
     truncated: bool = False
 
 
+class ImpactSubgraph(BaseModel):
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+    truncated: bool = False
+
+
 class ImpactGroup(BaseModel):
     entity_type: EntityType
     label: str
     count: int
+    total: int
+    returned: int
+    omitted: int
     entities: list[GraphNode]
 
 
@@ -231,6 +242,7 @@ class ImpactOut(BaseModel):
     max_depth: int | None = None
     total_affected: int
     groups: list[ImpactGroup]
+    analysis_subgraph: ImpactSubgraph
     integrations: int = 0
     scripts: int = 0
     jobs: int = 0

@@ -74,9 +74,10 @@ export function ImpactPanel({
               <p className="mt-0.5 text-[11px] text-muted">
                 Changing this may affect{" "}
                 <span className="font-semibold text-ink">
+                  {impact.truncated ? "at least " : ""}
                   {formatNumber(impact.total_affected)}
                 </span>{" "}
-                {impact.total_affected === 1 ? "entity" : "entities"}
+                {impact.total_affected === 1 && !impact.truncated ? "entity" : "entities"}
               </p>
             </>
           ) : (
@@ -121,6 +122,11 @@ export function ImpactPanel({
 
         {impact && !loading && (
           <>
+            {impact.truncated && (
+              <p role="status" className="mb-3 rounded-[6px] border border-warning/30 bg-warning/5 px-2.5 py-2 text-[11px] leading-relaxed text-muted">
+                Analysis reached its result limit. Counts cover the returned results; more affected entities may exist.
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-1.5">
               {buckets.map((bucket) => (
                 <div
@@ -128,6 +134,7 @@ export function ImpactPanel({
                   className="rounded-[6px] border border-line bg-surface-2 px-2.5 py-2"
                 >
                   <div className="tabular text-[17px] font-semibold leading-tight text-ink">
+                    {impact.truncated ? "≥ " : ""}
                     {bucket.value}
                   </div>
                   <div className="text-[10px] uppercase tracking-[0.06em] text-subtle">
@@ -170,7 +177,9 @@ export function ImpactPanel({
                         style={{ backgroundColor: visual.color }}
                       />
                       <span className="flex-1 text-[11.5px] text-ink">{group.label}</span>
-                      <span className="tabular text-[10.5px] text-subtle">{group.count}</span>
+                      <span className="tabular text-[10.5px] text-subtle">
+                        {impact.truncated ? "≥ " : ""}{formatNumber(group.total)}
+                      </span>
                     </button>
                     {open && (
                       <div className="border-t border-line px-2 pb-1.5">
@@ -189,6 +198,13 @@ export function ImpactPanel({
                             </span>
                           </button>
                         ))}
+                        {group.omitted > 0 && (
+                          <p role="status" className="px-1.5 py-1 text-[10px] leading-relaxed text-subtle">
+                            Showing {formatNumber(group.returned)} of {impact.truncated ? "at least " : ""}
+                            {formatNumber(group.total)} in this group. {formatNumber(group.omitted)} more
+                            analyzed entities are highlighted on the graph.
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -308,10 +324,19 @@ export function PathExplorer({
         {!loading && result && !result.found && (
           <div className="rounded-[7px] border border-dashed border-line px-3 py-6 text-center">
             <Crosshair className="mx-auto h-5 w-5 text-subtle" />
-            <div className="mt-2 text-[12px] font-medium text-ink">No path found</div>
+            <div className="mt-2 text-[12px] font-medium text-ink">
+              {result.limit_reason === "visit_budget"
+                ? "Search limit reached"
+                : result.limit_reason === "max_depth"
+                  ? `No path within ${result.max_depth} hops`
+                  : "No path found"}
+            </div>
             <p className="mt-1 text-[11px] leading-relaxed text-muted">
-              No active, non-rejected connection was found. Graph display filters do not
-              affect this search.
+              {result.limit_reason === "visit_budget"
+                ? "The search reached its visit budget before it could determine whether a path exists."
+                : result.limit_reason === "max_depth"
+                  ? "A longer route may exist. Graph display filters do not affect this search."
+                  : "No active, non-rejected connection was found. Graph display filters do not affect this search."}
             </p>
             <div className="mt-3"><Button size="xs" variant="outline" onClick={onEdit}>Change endpoints</Button></div>
           </div>

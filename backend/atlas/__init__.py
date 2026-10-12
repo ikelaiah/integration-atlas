@@ -1,3 +1,3 @@
 """Integration Atlas — local-first integration discovery and impact analysis."""
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"

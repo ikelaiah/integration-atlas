@@ -66,6 +66,8 @@ export interface GraphEdge {
   relationship_type: RelationshipType;
   flow_from: string;
   flow_to: string;
+  influence_label: string;
+  bidirectional: boolean;
   confidence: Confidence;
   review_status: ReviewStatus;
   label: string;
@@ -109,14 +111,22 @@ export interface Evidence {
   created_at: string;
 }
 
-export interface RelationshipDetail extends GraphEdge {
+export interface RelationshipDetail {
+  id: string;
   workspace_id: string;
+  source_id: string;
+  target_id: string;
+  relationship_type: RelationshipType;
+  confidence: Confidence;
+  review_status: ReviewStatus;
   source: GraphNode;
   target: GraphNode;
   evidence: Evidence[];
   source_kind: SourceKind;
   label: string;
   meta_json: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Step {
@@ -137,7 +147,16 @@ export interface ImpactGroup {
   entity_type: EntityType;
   label: string;
   count: number;
+  total: number;
+  returned: number;
+  omitted: number;
   entities: GraphNode[];
+}
+
+export interface ImpactSubgraph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  truncated: boolean;
 }
 
 export interface Impact {
@@ -146,6 +165,7 @@ export interface Impact {
   max_depth: number | null;
   total_affected: number;
   groups: ImpactGroup[];
+  analysis_subgraph: ImpactSubgraph;
   integrations: number;
   scripts: number;
   jobs: number;
@@ -160,6 +180,8 @@ export interface Impact {
 export interface PathResult {
   found: boolean;
   mode: "downstream" | "upstream" | "connected" | "none";
+  max_depth: number;
+  limit_reason: "max_depth" | "visit_budget" | null;
   from_entity: GraphNode | null;
   to_entity: GraphNode | null;
   steps: Step[];

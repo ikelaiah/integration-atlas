@@ -64,7 +64,13 @@ def export_workspace(
         index = GraphIndex(entities, relationships)
         output.write_text(render_diagram(
             [DiagramNode(e.id, e.name, e.entity_type) for e in index.nodes.values()],
-            [DiagramEdge(r.flow_from, r.flow_to, r.relationship_type.value)
+            [DiagramEdge(
+                r.flow_from,
+                r.flow_to,
+                r.relationship_type.value,
+                r.relationship_type.influence_label,
+                r.is_bidirectional,
+            )
              for r in index.edges],
             fmt=fmt,
         ), encoding="utf-8")

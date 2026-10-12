@@ -108,9 +108,14 @@ export const api = {
   neighbours: (workspaceId: string, entityId: string) =>
     request<Traversal>(`/api/graph/neighbours/${entityId}${qs({ workspace_id: workspaceId })}`),
 
-  path: (workspaceId: string, sourceId: string, targetId: string) =>
+  path: (
+    workspaceId: string,
+    sourceId: string,
+    targetId: string,
+    params: { max_depth?: number; max_visits?: number } = {},
+  ) =>
     request<PathResult>(
-      `/api/path${qs({ workspace_id: workspaceId, source_id: sourceId, target_id: targetId })}`,
+      `/api/path${qs({ workspace_id: workspaceId, source_id: sourceId, target_id: targetId, ...params })}`,
     ),
 
   search: (workspaceId: string, q: string, limit = 30) =>

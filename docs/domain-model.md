@@ -37,7 +37,7 @@ propagates:
 |---|---|---|---|
 | `reads_from` | A reads from B | B → A | read by |
 | `writes_to` | A writes to B | A → B | writes to |
-| `calls` | A calls B | **both** | couples |
+| `calls` | A calls B | **both** | calls (both directions) |
 | `runs` | A runs B | B → A | run by |
 | `runs_on` | A runs on B | B → A | hosts |
 | `depends_on` | A depends on B | B → A | required by |

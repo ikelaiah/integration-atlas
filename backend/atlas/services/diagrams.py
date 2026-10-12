@@ -21,6 +21,8 @@ class DiagramEdge:
     from_id: str
     to_id: str
     relationship_type: str
+    influence_label: str | None = None
+    bidirectional: bool = False
 
 
 def _alias(identifier: str) -> str:
@@ -58,8 +60,10 @@ def render_diagram(
                 f'  {_alias(node.id)}["{_label(node.name)} ({_label(node.entity_type)})"]'
             )
         for edge in ordered_edges:
+            arrow = "<-->" if edge.bidirectional else "-->"
+            label = edge.influence_label or edge.relationship_type.replace("_", " ")
             lines.append(
-                f"  {_alias(edge.from_id)} -->|{_label(edge.relationship_type)}| "
+                f"  {_alias(edge.from_id)} {arrow}|{_label(label)}| "
                 f"{_alias(edge.to_id)}"
             )
     else:
@@ -70,9 +74,10 @@ def render_diagram(
                 f"as {_alias(node.id)}"
             )
         for edge in ordered_edges:
+            arrow = "<-->" if edge.bidirectional else "-->"
+            label = edge.influence_label or edge.relationship_type.replace("_", " ")
             lines.append(
-                f"{_alias(edge.from_id)} --> {_alias(edge.to_id)} : "
-                f"{_label(edge.relationship_type)}"
+                f"{_alias(edge.from_id)} {arrow} {_alias(edge.to_id)} : {_label(label)}"
             )
         lines.append("@enduml")
     return "\n".join(lines) + "\n"

@@ -33,6 +33,8 @@ export function EntityListPage({
   onSelect,
 }: EntityListPageProps) {
   const [nodes, setNodes] = useState<GraphNode[]>([]);
+  const [totalNodes, setTotalNodes] = useState(0);
+  const [inventoryTruncated, setInventoryTruncated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("degree");
@@ -43,8 +45,16 @@ export function EntityListPage({
     setLoading(true);
     api
       .graph(workspaceId, { entity_type: types.length ? types : undefined })
-      .then((res) => setNodes(res.nodes))
-      .catch(() => setNodes([]))
+      .then((res) => {
+        setNodes(res.nodes);
+        setTotalNodes(res.totals.total_nodes);
+        setInventoryTruncated(res.truncated);
+      })
+      .catch(() => {
+        setNodes([]);
+        setTotalNodes(0);
+        setInventoryTruncated(false);
+      })
       .finally(() => setLoading(false));
   }, [workspaceId, types]);
 
@@ -231,6 +241,12 @@ export function EntityListPage({
           <span className="text-line-strong">·</span>
           <span>Click any row to open it in the Atlas</span>
         </div>
+        {inventoryTruncated && (
+          <p role="status" className="mt-2 rounded-[6px] border border-warning/30 bg-warning/5 px-2.5 py-2 text-[11px] text-muted">
+            The graph limit returned {formatNumber(nodes.length)} of {formatNumber(totalNodes)} entities
+            for this view. Filtered rows include only the returned entities.
+          </p>
+        )}
       </div>
     </div>
   );

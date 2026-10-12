@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from atlas.demo.seeder import get_or_create_workspace, run_risk_analysis
-from atlas.domain import EntityType, RelationshipType
+from atlas.domain import EntityType, Flow, RelationshipType
 from atlas.models import (
     Base,
     Entity,
@@ -286,6 +286,51 @@ def test_impact_endpoint(client, session) -> None:
     assert "groups" in payload
 
 
+def test_impact_discloses_group_limits_and_returns_analysis_subgraph(client, session) -> None:
+    workspace = get_or_create_workspace(session, "Impact completeness")
+    root = Entity(
+        workspace_id=workspace.id,
+        entity_type=EntityType.TABLE.value,
+        name="Student",
+        fingerprint="impact-root",
+    )
+    scripts = [
+        Entity(
+            workspace_id=workspace.id,
+            entity_type=EntityType.SCRIPT.value,
+            name=f"consumer-{i:02d}.py",
+            fingerprint=f"impact-consumer-{i}",
+        )
+        for i in range(60)
+    ]
+    session.add_all([root, *scripts])
+    session.flush()
+    session.add_all(
+        Relationship(
+            workspace_id=workspace.id,
+            source_id=script.id,
+            target_id=root.id,
+            relationship_type=RelationshipType.READS_FROM.value,
+            fingerprint=f"impact-edge-{i}",
+        )
+        for i, script in enumerate(scripts)
+    )
+    session.commit()
+
+    response = client.get(f"/api/impact/{root.id}?workspace_id={workspace.id}")
+    assert response.status_code == 200, response.text
+    impact = response.json()
+    group = next(group for group in impact["groups"] if group["entity_type"] == "script")
+    assert impact["total_affected"] == 60
+    assert group["count"] == group["total"] == 60
+    assert group["returned"] == len(group["entities"]) == 50
+    assert group["omitted"] == 10
+    assert impact["truncated"] is False
+    assert len(impact["analysis_subgraph"]["nodes"]) == 61
+    assert len(impact["analysis_subgraph"]["edges"]) == 60
+    assert impact["analysis_subgraph"]["truncated"] is False
+
+
 def test_path_endpoint(client, session) -> None:
     workspace = get_or_create_workspace(session, "Path API")
     run_scan(session, workspace, EXAMPLES)
@@ -370,8 +415,64 @@ def test_graph_combined_filters_keep_workspace_facets(client, session) -> None:
     )
     assert bounded["truncated"] is True
     assert len(bounded["nodes"]) == 1 and bounded["edges"] == []
+    assert bounded["totals"]["nodes"] == 1
+    assert bounded["totals"]["total_nodes"] > bounded["totals"]["nodes"]
     assert "nodes=1 edges=0" in bounded_diagram.text
     assert "truncated" in bounded_diagram.text
+
+
+def test_graph_exposes_influence_labels_and_bidirectional_calls(client, session) -> None:
+    workspace = get_or_create_workspace(session, "Diagram semantics")
+    nodes = [
+        Entity(
+            workspace_id=workspace.id,
+            entity_type=EntityType.SCRIPT.value,
+            name=f"diagram-node-{i}",
+            qualified_name=f"diagram-node-{i}",
+            fingerprint=f"diagram-node-{i}",
+        )
+        for i in range(len(RelationshipType) * 2)
+    ]
+    session.add_all(nodes)
+    session.flush()
+    session.add_all(
+        Relationship(
+            workspace_id=workspace.id,
+            source_id=nodes[i * 2].id,
+            target_id=nodes[i * 2 + 1].id,
+            relationship_type=relationship_type.value,
+            fingerprint=f"diagram-edge-{relationship_type.value}",
+        )
+        for i, relationship_type in enumerate(RelationshipType)
+    )
+    session.commit()
+
+    graph = client.get("/api/graph", params={"workspace_id": workspace.id}).json()
+    edge_by_type = {edge["relationship_type"]: edge for edge in graph["edges"]}
+    assert set(edge_by_type) == {relationship_type.value for relationship_type in RelationshipType}
+    for i, relationship_type in enumerate(RelationshipType):
+        edge = edge_by_type[relationship_type.value]
+        source_id, target_id = nodes[i * 2].id, nodes[i * 2 + 1].id
+        expected_from = target_id if relationship_type.flow is Flow.REVERSE else source_id
+        expected_to = source_id if relationship_type.flow is Flow.REVERSE else target_id
+        assert edge["source_id"] == source_id
+        assert edge["target_id"] == target_id
+        assert edge["flow_from"] == expected_from
+        assert edge["flow_to"] == expected_to
+        assert edge["influence_label"] == relationship_type.influence_label
+        assert edge["bidirectional"] is (relationship_type.flow is Flow.BOTH)
+
+    mermaid = client.get(
+        "/api/graph/export", params={"workspace_id": workspace.id, "format": "mermaid"}
+    ).text
+    plantuml = client.get(
+        "/api/graph/export", params={"workspace_id": workspace.id, "format": "plantuml"}
+    ).text
+    assert "<-->|calls|" in mermaid
+    assert "|read by|" in mermaid
+    assert "<-->" in plantuml
+    for relationship_type in RelationshipType:
+        assert f"|{relationship_type.influence_label}|" in mermaid
 
 
 def test_path_reports_influence_mode(client, session) -> None:

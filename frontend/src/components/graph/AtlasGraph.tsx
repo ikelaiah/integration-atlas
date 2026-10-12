@@ -15,7 +15,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import type { GraphEdge, GraphNode } from "@/lib/types";
-import { entityVisual, RELATIONSHIP_META, CONFIDENCE_META } from "@/lib/entity-visuals";
+import { entityVisual, CONFIDENCE_META } from "@/lib/entity-visuals";
 import { layoutGraph } from "@/lib/layout";
 import { cn, truncate } from "@/lib/utils";
 import { EntityNode, type EntityFlowNode } from "./EntityNode";
@@ -155,7 +155,6 @@ function AtlasGraphInner(props: AtlasGraphProps) {
   const flowEdges: Edge[] = useMemo(
     () =>
       edges.map((edge) => {
-        const meta = RELATIONSHIP_META[edge.relationship_type];
         const visual = entityVisual(
           nodes.find((n) => n.id === edge.flow_from)?.entity_type ?? "unknown",
         );
@@ -197,7 +196,15 @@ function AtlasGraphInner(props: AtlasGraphProps) {
             height: 13,
             color: stroke,
           },
-          label: meta.short,
+          markerStart: edge.bidirectional
+            ? {
+                type: MarkerType.ArrowClosed,
+                width: 13,
+                height: 13,
+                color: stroke,
+              }
+            : undefined,
+          label: edge.influence_label,
           labelStyle: {
             fill: isFocusEdge || touchesHover ? "#c8d4e0" : "#6b7b8c",
             fontSize: 8.5,

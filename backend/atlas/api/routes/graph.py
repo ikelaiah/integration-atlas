@@ -175,7 +175,13 @@ def export_graph(
     )
     body = render_diagram(
         [DiagramNode(node.id, node.name, node.entity_type.value) for node in graph.nodes],
-        [DiagramEdge(edge.flow_from, edge.flow_to, edge.relationship_type.value)
+        [DiagramEdge(
+            edge.flow_from,
+            edge.flow_to,
+            edge.relationship_type.value,
+            edge.relationship_type.influence_label,
+            edge.bidirectional,
+        )
          for edge in graph.edges],
         fmt=format, truncated=graph.truncated,
     )
