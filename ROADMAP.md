@@ -14,11 +14,15 @@ problems; choose the next release scope only when evidence supports it.
 - Use the shared [release quality bar](docs/release-quality.md) for every
   release.
 
-## v0.5.0 — Reliable Graph Exploration
+## Recent releases
 
-Make graph navigation predictable: drags pan the canvas without moving or
-selecting layout nodes, selection preserves the current viewport, and zoom and
-fit controls perform their labelled actions. See the
+**v0.5.1** clarifies local versus server collection privileges and adds Windows
+and Linux collectors for scheduler definitions and supported source/config
+files from explicit roots.
+
+**v0.5.0** made graph navigation predictable: drags pan the canvas without
+moving or selecting layout nodes, selection preserves the current viewport,
+and zoom and fit controls perform their labelled actions. See the
 [v0.5.0 specification](tasks/v0.5.0-spec.md).
 
 ## Candidate work

@@ -83,4 +83,15 @@
 - [x] Keep viewport in place during node selection; preserve explicit Fit and Reset behavior
 - [x] Wire Zoom in and Zoom out to zoom actions and label viewport buttons accessibly
 - [x] Add v0.5.0 specification and release notes; bump version metadata
+- [x] Full release checks, review, CI, release and Pages verification
+
+## v0.5.1 — Clarify collection privileges
+
+- [x] Clarify in the README that Atlas itself does not require elevated access
+      when scanned files are readable, while full server collection may.
+- [x] Add Windows and Linux collectors for scheduler definitions and supported
+      source/config files under explicitly supplied roots.
+- [x] Document collector usage, permission limits, scheduler coverage, and
+      handling of sensitive bundle contents.
+- [x] Add v0.5.1 release notes and bump version metadata.
 - [ ] Full release checks, review, CI, release and Pages verification

@@ -61,72 +61,65 @@ atlas scan run ./bundles
 * A bundle with no `server.json` still imports cleanly; its jobs simply have
   the execution server recorded as unknown and no `RUNS_ON` edge.
 
-## Collection is read-only
+## Collect a server bundle
 
-Every command below **only reads and exports** artefacts. Nothing is executed,
-imported, or evaluated.
+The included collectors **only read and copy** files and export scheduler
+definitions. They never run discovered jobs or scripts. Run a collector on each
+source server, then transfer the resulting bundle to the machine running Atlas.
+Pass every directory that contains integration scripts or configuration as a
+source root. The collector copies Atlas-supported text file types from those
+roots and preserves their relative paths; it does not search the whole disk or
+guess where an integration lives.
 
-### Windows — Task Scheduler
+Running Atlas itself does not require elevated privileges when the files being
+scanned are readable by your account. Collecting a complete set of scheduler
+definitions may require administrator access on Windows or root access on
+Linux, especially for tasks or crontabs owned by other accounts. Without those
+permissions, collect what you can read; inaccessible items may be missing.
 
-Run on the target host (e.g. from an admin shell) and write into the bundle:
+### Windows — Task Scheduler and source files
+
+From the repo checkout on the target host, run PowerShell and provide the real
+integration directories. Add one `-SourceRoot` path for each directory. Use an
+admin shell if needed to export all scheduled tasks and read every source file:
 
 ```powershell
-$bundle = "C:\collect\APP-SERVER-01"
-New-Item -ItemType Directory -Force $bundle\windows\tasks | Out-Null
-New-Item -ItemType Directory -Force $bundle\scripts | Out-Null
-
-@{
-  hostname    = $env:COMPUTERNAME
-  fqdn        = [System.Net.Dns]::GetHostEntry($env:COMPUTERNAME).HostName
-  os          = "windows"
-  environment = "production"
-} | ConvertTo-Json | Set-Content -Encoding UTF8 "$bundle\server.json"
-
-# Export each task definition as XML (does not run anything).
-Get-ScheduledTask | ForEach-Object {
-  $safe = ($_.TaskPath + $_.TaskName) -replace '[\\/:*?"<>|]', '_'
-  Export-ScheduledTask -TaskName $_.TaskName -TaskPath $_.TaskPath |
-    Set-Content -Encoding UTF8 (Join-Path $bundle\windows\tasks "$safe.xml")
-}
-
-# Copy referenced local scripts (read-only).
-Copy-Item C:\integrations\*.ps1 -Destination "$bundle\scripts" -ErrorAction SilentlyContinue
+& .\scripts\collectors\collect-windows.ps1 `
+  -OutputDirectory 'C:\collect\APP-SERVER-01' `
+  -SourceRoot 'C:\Integrations', 'D:\BatchJobs' `
+  -Environment 'production'
 ```
 
-### Linux — cron
+This exports Task Scheduler definitions and copies supported source/config
+files under each supplied root. Replace the example paths and environment with
+values from your server.
 
-Run on the target host and write into the bundle:
+### Linux — cron and source files
+
+From the repo checkout on the target host, provide every integration source
+directory. Use `sudo` to collect all users' crontabs and files that your account
+cannot read:
 
 ```bash
-BUNDLE=/collect/LINUX-01
-mkdir -p "$BUNDLE/linux/cron.d" "$BUNDLE/linux/crontabs" "$BUNDLE/scripts"
-
-cat > "$BUNDLE/server.json" <<JSON
-{
-  "hostname": "$(hostname)",
-  "fqdn": "$(hostname -f 2>/dev/null || hostname)",
-  "os": "linux",
-  "environment": "production"
-}
-JSON
-
-# System crontabs (optional user column).
-cp /etc/crontab "$BUNDLE/linux/cron.d/system-crontab" 2>/dev/null || true
-cp /etc/cron.d/* "$BUNDLE/linux/cron.d/" 2>/dev/null || true
-
-# Per-user crontabs: filename is the user; the lines have NO user column.
-for user in $(cut -d: -f1 /etc/passwd); do
-  line=$(crontab -l -u "$user" 2>/dev/null) && printf '%s\n' "$line" > "$BUNDLE/linux/crontabs/$user"
-done
-
-# Copy referenced local scripts (read-only).
-cp /opt/integrations/*.py "$BUNDLE/scripts/" 2>/dev/null || true
+sudo bash ./scripts/collectors/collect-linux.sh \
+  /collect/LINUX-01 \
+  /opt/integrations /srv/batch-jobs
 ```
+
+Replace the example paths with the directories used on your server. To set a
+non-production environment, pass it through `sudo env`, for example:
+`sudo env ATLAS_ENVIRONMENT=development bash ./scripts/collectors/collect-linux.sh ...`.
+This collector exports cron definitions; systemd timers and other schedulers
+are not currently imported by Atlas. Use the
+[supported scanners](../README.md#supported-scanners) as the coverage guide.
 
 ## Security notes
 
 * `server.json` is metadata; Atlas does not treat it as a config file and never
   mines it for entities.
 * Bundle locations never cause execution of the jobs they describe.
+* Bundles contain copies of source and config files and may include credentials.
+  Store and transfer them securely, and remove them when no longer needed.
 * Secrets in task arguments, cron commands, config or script snippets are
-  redacted at the parser boundary before persistence (ADR-004).
+  redacted before Atlas persists scan findings (ADR-004); the original bundle
+  files remain unredacted.

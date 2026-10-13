@@ -19,7 +19,10 @@ evidence for every edge — so you can answer the question that actually matters
 
 > *If I change `Student.Person.StudentID`, what breaks?*
 
-🏠 Local-first. 🚫 No agents, no telemetry, no Kubernetes, no admin access required.
+🏠 Local-first. 🚫 No agents, no telemetry, no Kubernetes. Running Atlas locally
+does not require admin access when you can read the files you scan. Collecting
+complete scheduler data from source servers may require administrator or root
+access; see the [server collection guide](docs/server-bundles.md).
 
 ---
 
@@ -284,6 +287,11 @@ influence direction, and filtered Mermaid/PlantUML diagram export.
 
 **v0.4.0** 🟢 — before/after graph checkpoints for applied scans, with
 cross-scan net comparison and field-level change detail.
+
+**v0.5.0** 🟢 — predictable graph panning, selection, zoom, and fit controls.
+
+**v0.5.1** 🟢 — Windows and Linux server collectors for scheduler definitions
+and supported source/config files, with clear access and sensitive-data notes.
 
 **Phase 3** 🔵 — SQL Server Agent scheduler exports, GitHub Actions and Azure
 Automation workflow exports, PostgreSQL storage, team collaboration, and
