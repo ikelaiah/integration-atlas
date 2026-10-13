@@ -33,6 +33,11 @@ export interface GraphHighlight {
   pathIds?: Set<string>;
 }
 
+export interface GraphViewportCommand {
+  action: "fit" | "zoom-in" | "zoom-out";
+  sequence: number;
+}
+
 export interface AtlasGraphProps {
   nodes: GraphNode[];
   edges: GraphEdge[];
@@ -44,7 +49,7 @@ export interface AtlasGraphProps {
   onSelect: (id: string | null) => void;
   onHover: (id: string | null) => void;
   onEdgeSelect?: (edge: GraphEdge) => void;
-  fitSignal?: number;
+  viewportCommand?: GraphViewportCommand;
   focusSignal?: { id: string; zoom?: number };
   className?: string;
 }
@@ -84,7 +89,7 @@ function AtlasGraphInner(props: AtlasGraphProps) {
     onSelect,
     onHover,
     onEdgeSelect,
-    fitSignal,
+    viewportCommand,
     focusSignal,
     className,
   } = props;
@@ -145,7 +150,7 @@ function AtlasGraphInner(props: AtlasGraphProps) {
             }),
           },
           style: { width: pos?.width ?? 190, height: pos?.height ?? 52 },
-          draggable: true,
+          draggable: false,
           connectable: false,
         } satisfies EntityFlowNode;
       }),
@@ -221,12 +226,18 @@ function AtlasGraphInner(props: AtlasGraphProps) {
   );
 
   useEffect(() => {
-    if (!fitSignal) return;
+    if (!viewportCommand?.sequence) return;
     const timer = window.setTimeout(() => {
-      flow.fitView({ padding: 0.14, duration: 520, maxZoom: 1.05 });
+      if (viewportCommand.action === "fit") {
+        flow.fitView({ padding: 0.14, duration: 520, maxZoom: 1.05 });
+      } else if (viewportCommand.action === "zoom-in") {
+        flow.zoomIn({ duration: 250 });
+      } else {
+        flow.zoomOut({ duration: 250 });
+      }
     }, 40);
     return () => window.clearTimeout(timer);
-  }, [fitSignal, flow]);
+  }, [viewportCommand, flow]);
 
   useEffect(() => {
     if (!focusSignal) return;
@@ -271,9 +282,11 @@ function AtlasGraphInner(props: AtlasGraphProps) {
         fitViewOptions={{ padding: 0.14, maxZoom: 1.05 }}
         minZoom={0.12}
         maxZoom={1.9}
-        nodesDraggable
+        nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable
+        selectNodesOnDrag={false}
+        panOnDrag
         panOnScroll
         zoomOnPinch
         zoomOnDoubleClick

@@ -179,3 +179,15 @@ See [the v0.4.0 specification](v0.4.0-spec.md). Ship in four slices:
    field detail; verify the frontend build and local demo flow.
 4. Document behavior, bump version, review and verify the full stack, then
    merge after CI and verify release and Pages.
+
+## v0.5.0 — Reliable Graph Exploration
+
+See [the v0.5.0 specification](v0.5.0-spec.md). Ship in three slices:
+
+1. Define the graph gesture contract: nodes stay in automatic layout, clicks
+   select, and left-button drags pan the canvas in both axes without a drag
+   selecting or displacing a node.
+2. Keep the viewport stable during selection and detail updates; make zoom in,
+   zoom out, Fit, and Reset perform their labelled actions.
+3. Document the interaction, bump version metadata, check the frontend build,
+   review, then complete full release checks before publishing v0.5.0.

@@ -75,3 +75,12 @@
 - [x] Add scan-history comparison controls and change detail
 - [x] Operator docs, ADR, release notes and version 0.4.0
 - [x] Full checks, review, CI, release and Pages verification
+
+## v0.5.0 — Reliable Graph Exploration
+
+- [x] Keep graph nodes fixed to automatic layout; distinguish click selection
+      from canvas panning
+- [x] Keep viewport in place during node selection; preserve explicit Fit and Reset behavior
+- [x] Wire Zoom in and Zoom out to zoom actions and label viewport buttons accessibly
+- [x] Add v0.5.0 specification and release notes; bump version metadata
+- [ ] Full release checks, review, CI, release and Pages verification

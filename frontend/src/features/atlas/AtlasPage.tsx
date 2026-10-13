@@ -22,7 +22,12 @@ import {
   entityVisual,
 } from "@/lib/entity-visuals";
 import { cn, formatNumber } from "@/lib/utils";
-import { AtlasGraph, GraphLegend, type GraphHighlight } from "@/components/graph/AtlasGraph";
+import {
+  AtlasGraph,
+  GraphLegend,
+  type GraphHighlight,
+  type GraphViewportCommand,
+} from "@/components/graph/AtlasGraph";
 import { EntityPanel } from "@/components/panels/EntityPanel";
 import { ImpactPanel, PathExplorer } from "@/components/panels/ImpactPanel";
 import { PathFinderDialog } from "@/components/panels/PathFinderDialog";
@@ -69,10 +74,17 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
   const [pathError, setPathError] = useState<string | null>(null);
   const [pathFinderOpen, setPathFinderOpen] = useState(false);
 
-  const [fitSignal, setFitSignal] = useState(0);
+  const [viewportCommand, setViewportCommand] = useState<GraphViewportCommand>({
+    action: "fit",
+    sequence: 0,
+  });
   const [focusSignal, setFocusSignal] = useState<{ id: string; zoom?: number } | undefined>();
   const requestSeq = useRef(0);
   const pathSeq = useRef(0);
+
+  const requestViewportCommand = (action: GraphViewportCommand["action"]) => {
+    setViewportCommand((current) => ({ action, sequence: current.sequence + 1 }));
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => setSearchQuery(searchFilter.trim()), 250);
@@ -375,24 +387,43 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
               Map
             </Button>
             <Separator orientation="vertical" className="mx-0.5 h-4" />
-            <Button variant="ghost" size="iconSm" title="Zoom in" onClick={() => setFitSignal((n) => n + 1)}>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              title="Zoom in"
+              aria-label="Zoom in"
+              onClick={() => requestViewportCommand("zoom-in")}
+            >
               <Plus className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="iconSm" title="Zoom out">
+            <Button
+              variant="ghost"
+              size="iconSm"
+              title="Zoom out"
+              aria-label="Zoom out"
+              onClick={() => requestViewportCommand("zoom-out")}
+            >
               <Minus className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="iconSm" title="Fit to view" onClick={() => setFitSignal((n) => n + 1)}>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              title="Fit to view"
+              aria-label="Fit to view"
+              onClick={() => requestViewportCommand("fit")}
+            >
               <Maximize2 className="h-3.5 w-3.5" />
             </Button>
             <Button
               variant="ghost"
               size="iconSm"
               title="Reset view"
+              aria-label="Reset view"
               onClick={() => {
                 setPanel(null);
                 setSelectedId(null);
                 clearFilters();
-                setFitSignal((n) => n + 1);
+                requestViewportCommand("fit");
               }}
             >
               <RotateCcw className="h-3.5 w-3.5" />
@@ -548,7 +579,7 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
               onSelect={handleSelect}
               onHover={setHoveredId}
               onEdgeSelect={(edge) => handleSelect(edge.flow_from)}
-              fitSignal={fitSignal}
+              viewportCommand={viewportCommand}
               focusSignal={focusSignal}
             />
           )}

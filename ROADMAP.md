@@ -14,10 +14,17 @@ problems; choose the next release scope only when evidence supports it.
 - Use the shared [release quality bar](docs/release-quality.md) for every
   release.
 
+## v0.5.0 — Reliable Graph Exploration
+
+Make graph navigation predictable: drags pan the canvas without moving or
+selecting layout nodes, selection preserves the current viewport, and zoom and
+fit controls perform their labelled actions. See the
+[v0.5.0 specification](tasks/v0.5.0-spec.md).
+
 ## Candidate work
 
-These are options to revisit, not a schedule. Select only the highest-impact
-problem when planning the next release.
+These are options to revisit for later releases. Select only the highest-impact
+problem when planning each release.
 
 - Make navigation, errors, refresh, and workspace changes predictable.
 - Distinguish the Northstar demo from a real workspace during first run.
