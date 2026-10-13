@@ -94,4 +94,4 @@
 - [x] Document collector usage, permission limits, scheduler coverage, and
       handling of sensitive bundle contents.
 - [x] Add v0.5.1 release notes and bump version metadata.
-- [ ] Full release checks, review, CI, release and Pages verification
+- [x] Full release checks, review, CI, release and Pages verification
