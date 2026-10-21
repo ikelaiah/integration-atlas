@@ -107,4 +107,4 @@
 - [x] CLI names fallback workspaces and resolves `scan run --workspace` by id
       or slug.
 - [x] Spec, ADR, docs, release notes and version 0.6.0.
-- [ ] Full release checks, review, CI, release and Pages verification
+- [x] Full release checks, review, CI, release and Pages verification
