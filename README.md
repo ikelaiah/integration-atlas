@@ -131,14 +131,22 @@ atlas serve                        # open http://localhost:8000
 To scan your own files instead, keep them together in a folder and run:
 
 ```bash
-atlas scan run ./my-integrations
+atlas scan run ./my-integrations --workspace "Student Systems"
 atlas serve
 ```
 
-In the web app, open **Scans**, enter a folder, and choose **Preview scan**.
-The preview lists proposed additions, updates and retirements without changing
-the workspace. Choose **Apply scan** to scan the current files and save the
-actual result in scan history. Open **Review** to inspect relationship evidence
+On a new database, the web app asks whether to explore the Northstar demo or
+scan your own folder; it loads nothing until you choose. Northstar lives in its
+own demo workspace, and your scans always go into a workspace of your own, so
+sample data never mixes with your estate. Switch workspaces from the sidebar;
+Atlas remembers your choice. **Settings → Reset demo estate** restores the
+demo and never deletes scan results.
+
+In the web app, open **Scans**, enter a folder, choose an existing workspace or
+name a new one, and choose **Preview scan**. The preview lists proposed
+additions, updates and retirements without changing anything, including
+creating the workspace. Choose **Apply scan** to scan the current files and
+save the actual result in scan history. Open **Review** to inspect relationship evidence
 and confirm or reject discoveries. Select an entity in **Atlas** and choose
 **Edit** to correct its description, owner, technology, location or environment.
 These manual fields and review verdicts survive later rescans. Compare saved
@@ -200,6 +208,11 @@ atlas export -f mermaid -o atlas.mmd  # Mermaid diagram
 atlas export -f plantuml -o atlas.puml # PlantUML diagram
 atlas serve                        # start the web application
 ```
+
+`impact` and `export` use the oldest workspace unless you pass
+`--workspace <slug>`, and print which one they used. `atlas status` lists the
+slugs. `atlas scan run --workspace` accepts an existing workspace's id or slug,
+or a new name, and refuses the demo workspace.
 
 In **Atlas**, combine node type, environment, confidence, relationship type,
 review status and text search to narrow the graph. **Find path** searches the
@@ -292,6 +305,10 @@ cross-scan net comparison and field-level change detail.
 
 **v0.5.1** 🟢 — Windows and Linux server collectors for scheduler definitions
 and supported source/config files, with clear access and sensitive-data notes.
+
+**v0.6.0** 🟢 — a first-run choice between the demo and your own folder,
+scans into named workspaces, a sidebar workspace switcher, and a demo reset
+that never deletes scan results.
 
 **Phase 3** 🔵 — SQL Server Agent scheduler exports, GitHub Actions and Azure
 Automation workflow exports, PostgreSQL storage, team collaboration, and

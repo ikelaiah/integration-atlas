@@ -10,13 +10,22 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from atlas.demo.northstar import EntitySpec, RelSpec, build_demo, redacted_snippet
 from atlas.domain import Confidence, ReviewStatus, SourceKind, SubjectKind
-from atlas.models import Entity, Evidence, Relationship, RiskFinding, SecretEvent, Workspace
+from atlas.models import (
+    Entity,
+    Evidence,
+    Relationship,
+    RiskFinding,
+    Scan,
+    SecretEvent,
+    Workspace,
+)
 from atlas.services.graph import GraphIndex
 from atlas.services.redaction import redact_value
 from atlas.services.risk import RiskContext, drafts_to_rows, run_rules
@@ -231,10 +240,14 @@ class ApplyResult:
     risks_found: int = 0
     unchanged: int = 0
     entity_ids: dict[str, str] = field(default_factory=dict)
+    kept_workspace_id: str | None = None
+    kept_workspace_name: str | None = None
 
     def as_dict(self) -> dict:
         return {
             "workspace_id": self.workspace_id,
+            "kept_workspace_id": self.kept_workspace_id,
+            "kept_workspace_name": self.kept_workspace_name,
             "entities_added": self.entities_added,
             "entities_updated": self.entities_updated,
             "entities_removed": self.entities_removed,
@@ -456,15 +469,141 @@ def run_risk_analysis(session: Session, workspace: Workspace) -> int:
     return len(rows)
 
 
-def seed_northstar_demo(session: Session, *, replace: bool = True) -> ApplyResult:
-    bundle = build_demo()
-    workspace = get_or_create_workspace(
-        session,
-        "Northstar Education Group",
-        description="Fictional demo estate: legacy SIS, enrolment portal, finance ERP and SaaS integrations.",
-        is_demo=True,
-        slug="northstar-education-group",
+DEMO_NAME = "Northstar Education Group"
+DEMO_SLUG = "northstar-education-group"
+DEMO_DESCRIPTION = (
+    "Fictional demo estate: legacy SIS, enrolment portal, finance ERP and SaaS integrations."
+)
+
+
+class DemoWorkspaceError(ValueError):
+    """Raised when an operation would put non-demo data into the demo workspace."""
+
+
+def find_demo_workspace(session: Session) -> Workspace | None:
+    return session.scalar(
+        select(Workspace).where(Workspace.is_demo.is_(True)).order_by(Workspace.created_at)
     )
+
+
+def _unique_slug(session: Session, base: str) -> str:
+    slug, suffix = base, 2
+    while session.scalar(select(Workspace.id).where(Workspace.slug == slug)) is not None:
+        slug = f"{base}-{suffix}"
+        suffix += 1
+    return slug
+
+
+@dataclass
+class DemoStatus:
+    """What a demo reset would restore, and what it would keep aside."""
+
+    workspace: Workspace | None
+    demo_entities: int
+    demo_relationships: int
+    edited_entities: int = 0
+    reviewed_relationships: int = 0
+    scans: int = 0
+    other_entities: int = 0
+    other_relationships: int = 0
+
+    @property
+    def has_other_data(self) -> bool:
+        return bool(self.scans or self.other_entities or self.other_relationships)
+
+
+def _demo_fingerprints() -> tuple[set[str], dict[str, str]]:
+    """Entity fingerprints and each relationship's seeded review status."""
+    bundle = build_demo()
+    entity_fps: dict[str, str] = {}
+    for spec in bundle.entities:
+        entity_fps[spec.key] = fingerprint_entity(
+            spec.entity_type.value, spec.qualified_name, spec.name, spec.location
+        )
+    relationships: dict[str, str] = {}
+    for spec in bundle.relationships:
+        if spec.source not in entity_fps or spec.target not in entity_fps:
+            continue
+        fp = fingerprint_relationship(
+            entity_fps[spec.source], entity_fps[spec.target], spec.rel_type.value, spec.label
+        )
+        relationships[fp] = (
+            ReviewStatus.CONFIRMED.value
+            if spec.confidence is Confidence.CONFIRMED
+            else ReviewStatus.PROPOSED.value
+        )
+    return set(entity_fps.values()), relationships
+
+
+def demo_status(session: Session) -> DemoStatus:
+    entity_fps, relationship_status = _demo_fingerprints()
+    status = DemoStatus(
+        workspace=find_demo_workspace(session),
+        demo_entities=len(entity_fps),
+        demo_relationships=len(relationship_status),
+    )
+    workspace = status.workspace
+    if workspace is None:
+        return status
+    for entity in session.scalars(select(Entity).where(Entity.workspace_id == workspace.id)):
+        if entity.fingerprint not in entity_fps:
+            status.other_entities += 1
+        elif entity.manual_fields_json:
+            status.edited_entities += 1
+    for rel in session.scalars(
+        select(Relationship).where(Relationship.workspace_id == workspace.id)
+    ):
+        seeded = relationship_status.get(rel.fingerprint)
+        if seeded is None:
+            status.other_relationships += 1
+        elif rel.review_status != seeded:
+            status.reviewed_relationships += 1
+    status.scans = len(
+        list(session.scalars(select(Scan.id).where(Scan.workspace_id == workspace.id)))
+    )
+    return status
+
+
+def kept_workspace_name(session: Session) -> tuple[str, str]:
+    """A unique name and slug for a demo workspace kept aside by a reset."""
+    base = f"{DEMO_NAME} (kept {date.today().isoformat()})"
+    name, suffix = base, 2
+    while session.scalar(select(Workspace.id).where(Workspace.slug == slugify(name))) is not None:
+        name = f"{base} {suffix}"
+        suffix += 1
+    return name, slugify(name)
+
+
+def seed_northstar_demo(session: Session, *, replace: bool = True) -> ApplyResult:
+    """Load the Northstar demo into the demo workspace.
+
+    ``replace=True`` restores the original demo data. Data that did not come
+    from the demo is never deleted: if the demo workspace holds scan history or
+    rows outside the Northstar bundle, that workspace is kept as a regular
+    workspace and a fresh demo workspace is created beside it.
+    """
+    bundle = build_demo()
+    kept: Workspace | None = None
+    workspace = find_demo_workspace(session)
+    if replace and workspace is not None and demo_status(session).has_other_data:
+        kept = workspace
+        kept.is_demo = False
+        kept.name, kept.slug = kept_workspace_name(session)
+        kept.description = (
+            "Kept when the demo was reset because this workspace held scan results "
+            "or data added outside the demo."
+        )
+        session.flush()
+        workspace = None
+    if workspace is None:
+        workspace = Workspace(
+            name=DEMO_NAME,
+            slug=_unique_slug(session, DEMO_SLUG),
+            description=DEMO_DESCRIPTION,
+            is_demo=True,
+        )
+        session.add(workspace)
+        session.flush()
     result = apply_bundle(
         session,
         workspace,
@@ -474,7 +613,44 @@ def seed_northstar_demo(session: Session, *, replace: bool = True) -> ApplyResul
         replace=replace,
     )
     result.risks_found = run_risk_analysis(session, workspace)
+    if kept is not None:
+        result.kept_workspace_id = kept.id
+        result.kept_workspace_name = kept.name
     return result
+
+
+def resolve_scan_workspace(
+    session: Session,
+    *,
+    workspace_id: str | None,
+    workspace_name: str | None,
+    default_name: str,
+    description: str = "",
+) -> Workspace:
+    """Find or create the workspace a scan writes to; never the demo.
+
+    ``workspace_id`` may be an id or a slug. Raises ``LookupError`` for an
+    unknown id and :class:`DemoWorkspaceError` for the demo workspace.
+    """
+    if workspace_id:
+        workspace = session.scalar(
+            select(Workspace).where(
+                (Workspace.id == workspace_id) | (Workspace.slug == workspace_id)
+            )
+        )
+        if workspace is None:
+            raise LookupError("Workspace not found")
+    else:
+        name = (workspace_name or "").strip() or default_name
+        workspace = session.scalar(select(Workspace).where(Workspace.slug == slugify(name)))
+        if workspace is None:
+            workspace = get_or_create_workspace(session, name, description=description)
+    if workspace.is_demo:
+        raise DemoWorkspaceError(
+            f"{workspace.name} is the demo workspace and only holds Northstar demo data. "
+            "Scan into a workspace of your own instead."
+        )
+    return workspace
 
 
 def demo_entity_count() -> tuple[int, int]:

@@ -117,6 +117,11 @@ A workspace is an isolated scope — "Student Systems", "Finance Integrations",
 "Whole Organisation". It owns its own entities, relationships, evidence,
 scans, risk findings and manual edits.
 
+The demo workspace (`is_demo`) holds only the Northstar sample estate. Scans
+cannot write into it, and resetting it never deletes data from elsewhere. If it
+holds scan results, the reset keeps them in a separate regular workspace. See
+`docs/adr/010-reserved-demo-workspace.md`.
+
 ## Risk findings
 
 Heuristic, explainable, and never a black-box score. Each finding names its

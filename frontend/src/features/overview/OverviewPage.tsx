@@ -70,11 +70,11 @@ export function OverviewPage({ workspaceId }: { workspaceId: string | null }) {
     return (
       <div className="flex h-full items-center justify-center p-8">
         <EmptyState
-          title="No workspace loaded"
-          description="Load the Northstar demo estate to see the integration overview."
+          title="Overview unavailable"
+          description="Atlas could not load this workspace's overview. Check that the server is still running, then try again."
           action={
-            <Button variant="default" size="sm" onClick={() => api.workspaces.seedDemo().then(() => window.location.reload())}>
-              Load demo estate
+            <Button variant="default" size="sm" onClick={() => window.location.reload()}>
+              Reload
             </Button>
           }
         />

@@ -76,7 +76,13 @@ def init() -> None:
 
 @app.command()
 def demo(
-    reset: Annotated[bool, typer.Option("--reset", help="Replace existing demo data.")] = True,
+    reset: Annotated[
+        bool,
+        typer.Option(
+            "--reset/--no-reset",
+            help="Restore the original demo data. Scan results are kept in a separate workspace.",
+        ),
+    ] = True,
 ) -> None:
     """Load the Northstar Education Group demo estate."""
     init_db()
@@ -84,6 +90,11 @@ def demo(
     with session_scope() as session:
         result = seed_northstar_demo(session, replace=reset)
 
+    if result.kept_workspace_name:
+        console.print(
+            "[yellow]The demo workspace held scan results or added data.[/yellow] "
+            f"They are kept in the workspace [bold]{result.kept_workspace_name}[/bold]."
+        )
     console.print(
         Panel.fit(
             f"[bold green]Northstar Education Group[/bold green] seeded\n\n"
@@ -283,7 +294,10 @@ def scan_root(ctx: typer.Context) -> None:
 def scan_run(
     path: Annotated[Path, typer.Argument(help="Directory to discover.")],
     workspace: Annotated[
-        str | None, typer.Option("--workspace", "-w", help="Workspace name or id.")
+        str | None,
+        typer.Option(
+            "--workspace", "-w", help="Workspace id, slug or name; created if it does not exist."
+        ),
     ] = None,
 ) -> None:
     """Discover integrations from a folder of artefacts."""
@@ -295,10 +309,23 @@ def scan_run(
         raise typer.Exit(1)
 
     init_db()
-    from atlas.demo.seeder import get_or_create_workspace
+    from atlas.demo.seeder import DemoWorkspaceError, resolve_scan_workspace
 
     with session_scope() as session:
-        ws = get_or_create_workspace(session, workspace or root.name, description=f"Scanned {root}")
+        # An id or slug selects an existing workspace; anything else is a name.
+        existing = _resolve_workspace(session, workspace) if workspace else None
+        try:
+            ws = resolve_scan_workspace(
+                session,
+                workspace_id=existing.id if existing is not None else None,
+                workspace_name=workspace,
+                default_name=root.name,
+                description=f"Scanned {root}",
+            )
+        except DemoWorkspaceError as exc:
+            err_console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(1) from exc
+        console.print(f"[dim]Workspace[/dim] {ws.name} [dim]({ws.slug})[/dim]")
         with console.status(f"[cyan]Scanning {root}...[/cyan]"):
             summary = run_scan(session, ws, root)
 
@@ -316,7 +343,14 @@ def _resolve_workspace(session, ref: str | None) -> Workspace | None:
         return session.scalar(
             select(Workspace).where((Workspace.id == ref) | (Workspace.slug == ref))
         )
-    return session.scalar(select(Workspace).order_by(Workspace.created_at))
+    workspace = session.scalar(select(Workspace).order_by(Workspace.created_at))
+    if workspace is not None:
+        # Name the fallback so output is never silently about the wrong estate.
+        err_console.print(
+            f"[dim]Using workspace[/dim] {workspace.name} [dim]({workspace.slug}). "
+            "Pass --workspace to choose another.[/dim]"
+        )
+    return workspace
 
 
 def _find_entity(entities: list[Entity], ref: str) -> Entity | None:

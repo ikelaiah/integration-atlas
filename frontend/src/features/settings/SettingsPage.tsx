@@ -1,10 +1,19 @@
 import { useEffect, useState } from "react";
-import { Database, Download, HardDrive, Shield, Terminal, Trash2 } from "lucide-react";
+import { Database, Download, GraduationCap, HardDrive, Loader2, RotateCcw, Shield, Terminal } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Workspace } from "@/lib/types";
+import type { DemoReset, DemoStatus, Workspace } from "@/lib/types";
+import { formatNumber } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/misc";
 
 export function SettingsPage({
@@ -12,13 +21,17 @@ export function SettingsPage({
   workspaceId,
   onSelectWorkspace,
   onReload,
+  onDemoReset,
 }: {
   workspaces: Workspace[];
   workspaceId: string | null;
   onSelectWorkspace: (id: string) => void;
   onReload: () => void;
+  onDemoReset: (result: DemoReset) => void;
 }) {
   const [version, setVersion] = useState("—");
+  const hasDemo = workspaces.some((w) => w.is_demo);
+  const [resetOpen, setResetOpen] = useState(false);
 
   useEffect(() => {
     api.health().then((h) => setVersion(h.version)).catch(() => setVersion("—"));
@@ -118,12 +131,12 @@ export function SettingsPage({
             </CardHeader>
             <CardContent>
               <pre className="mono rounded-[6px] border border-line bg-canvas px-3 py-2.5 text-[10.5px] leading-relaxed text-ink-muted">
-{`atlas init          # create the local database
-atlas demo          # load the Northstar demo estate
-atlas scan ./dir    # discover integrations from artefacts
-atlas impact <name> # what breaks if this changes?
-atlas serve         # start the web application
-atlas export -f json`}
+{`atlas init                   # create the local database
+atlas demo                   # load or reset the Northstar demo
+atlas scan run ./dir -w NAME # discover into your own workspace
+atlas impact <name> -w NAME  # what breaks if this changes?
+atlas serve                  # start the web application
+atlas export -f json -w NAME`}
               </pre>
             </CardContent>
           </Card>
@@ -148,18 +161,122 @@ atlas export -f json`}
                 <Button variant="outline" size="sm" onClick={onReload}>
                   <Download className="h-3 w-3" /> Reload data
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => api.workspaces.seedDemo().then(onReload)}
-                >
-                  <Trash2 className="h-3 w-3" /> Reset demo estate
+                <Button variant="outline" size="sm" onClick={() => setResetOpen(true)}>
+                  {hasDemo ? (
+                    <>
+                      <RotateCcw className="h-3 w-3" /> Reset demo estate
+                    </>
+                  ) : (
+                    <>
+                      <GraduationCap className="h-3 w-3" /> Load demo estate
+                    </>
+                  )}
                 </Button>
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
+      <DemoResetDialog
+        open={resetOpen}
+        onOpenChange={setResetOpen}
+        onDone={(result) => {
+          setResetOpen(false);
+          onDemoReset(result);
+        }}
+      />
     </div>
+  );
+}
+
+function plural(count: number, one: string, many = `${one}s`): string {
+  return `${formatNumber(count)} ${count === 1 ? one : many}`;
+}
+
+/** Says exactly what a reset restores and what it keeps before anything changes. */
+function DemoResetDialog({
+  open,
+  onOpenChange,
+  onDone,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDone: (result: DemoReset) => void;
+}) {
+  const [status, setStatus] = useState<DemoStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setStatus(null);
+    setError(null);
+    api.demo.status().then(setStatus).catch((err: Error) => setError(err.message));
+  }, [open]);
+
+  const confirm = () => {
+    setWorking(true);
+    setError(null);
+    api.demo
+      .reset()
+      .then(onDone)
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setWorking(false));
+  };
+
+  const exists = Boolean(status?.workspace);
+  const otherParts = status
+    ? [
+        status.scans ? plural(status.scans, "scan") : null,
+        status.other_entities ? plural(status.other_entities, "entity", "entities") : null,
+        status.other_relationships ? plural(status.other_relationships, "relationship") : null,
+      ].filter(Boolean)
+    : [];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{exists || !status ? "Reset the Northstar demo?" : "Load the Northstar demo?"}</DialogTitle>
+          <DialogDescription>
+            {!status && !error && "Checking the demo workspace…"}
+            {status && !exists &&
+              `Creates a separate demo workspace with ${plural(status.demo_entities, "entity", "entities")} and ${plural(status.demo_relationships, "relationship")}. Your workspaces are not changed.`}
+            {status && exists &&
+              `Restores ${plural(status.demo_entities, "entity", "entities")} and ${plural(status.demo_relationships, "relationship")} to the original demo data. Other workspaces are not changed.`}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 px-5 text-[12px] leading-relaxed text-muted">
+          {status && exists && (status.edited_entities > 0 || status.reviewed_relationships > 0) && (
+            <p>
+              Reverts {plural(status.edited_entities, "entity edit")} and{" "}
+              {plural(status.reviewed_relationships, "review decision")} made in the demo.
+            </p>
+          )}
+          {status?.has_other_data && (
+            <div className="rounded-[6px] border border-accent/30 bg-accent-soft px-3 py-2 text-ink">
+              The demo workspace also holds data that is not part of the demo:{" "}
+              {otherParts.join(", ")}. Nothing is deleted. Atlas keeps that workspace, with its scan
+              history, as <span className="font-medium">“{status.kept_workspace_name}”</span> and
+              creates a fresh demo workspace.
+            </div>
+          )}
+          {error && (
+            <div className="rounded-[5px] border border-danger/30 bg-danger/10 px-2.5 py-1.5 text-[11px] text-danger">
+              {error}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={confirm} disabled={!status || working}>
+            {working && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {exists ? "Reset demo" : "Load demo"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

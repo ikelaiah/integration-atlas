@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity,
   Boxes,
@@ -13,6 +13,7 @@ import {
   Waypoints,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { Workspace } from "@/lib/types";
 import { SimpleTooltip } from "@/components/ui/tooltip";
 
 export interface SidebarProps {
@@ -20,7 +21,12 @@ export interface SidebarProps {
   onToggle: () => void;
   workspaceName: string;
   isDemo: boolean;
+  workspaces: Workspace[];
+  workspaceId: string | null;
+  onSelectWorkspace: (id: string) => void;
 }
+
+const NEW_WORKSPACE = "__new__";
 
 const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
@@ -34,8 +40,17 @@ const NAV = [
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
-export function Sidebar({ collapsed, onToggle, workspaceName, isDemo }: SidebarProps) {
+export function Sidebar({
+  collapsed,
+  onToggle,
+  workspaceName,
+  isDemo,
+  workspaces,
+  workspaceId,
+  onSelectWorkspace,
+}: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
 
   return (
     <nav
@@ -80,7 +95,7 @@ export function Sidebar({ collapsed, onToggle, workspaceName, isDemo }: SidebarP
               Integration Atlas
             </div>
             <div className="truncate text-[9.5px] leading-tight text-subtle">
-              {isDemo ? "Demo workspace" : "Local workspace"}
+              {!workspaceId ? "No workspace yet" : isDemo ? "Demo workspace" : "Local workspace"}
             </div>
           </div>
         )}
@@ -133,11 +148,40 @@ export function Sidebar({ collapsed, onToggle, workspaceName, isDemo }: SidebarP
         </div>
       </div>
 
-      {/* workspace footer */}
+      {/* workspace switcher */}
       {!collapsed && (
         <div className="border-t border-line px-3 py-2.5">
-          <div className="text-[9.5px] uppercase tracking-[0.08em] text-subtle">Workspace</div>
-          <div className="mt-0.5 truncate text-[11.5px] text-ink">{workspaceName}</div>
+          <label
+            htmlFor="active-workspace"
+            className="block text-[9.5px] uppercase tracking-[0.08em] text-subtle"
+          >
+            Workspace
+          </label>
+          {workspaces.length > 0 ? (
+            <select
+              id="active-workspace"
+              value={workspaceId ?? ""}
+              onChange={(event) => {
+                if (event.target.value === NEW_WORKSPACE) navigate("/scans");
+                else onSelectWorkspace(event.target.value);
+              }}
+              className="mt-1 h-7 w-full truncate rounded-[5px] border border-line-strong bg-surface-2 px-1.5 text-[11.5px] text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/40"
+            >
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.is_demo ? `${workspace.name} (demo)` : workspace.name}
+                </option>
+              ))}
+              <option value={NEW_WORKSPACE}>New workspace from a scan…</option>
+            </select>
+          ) : (
+            <div className="mt-0.5 truncate text-[11.5px] text-ink">{workspaceName}</div>
+          )}
+          {isDemo && (
+            <div className="mt-1 text-[10px] leading-snug text-subtle">
+              Fictional sample data. Your scans go into a workspace of your own.
+            </div>
+          )}
         </div>
       )}
 

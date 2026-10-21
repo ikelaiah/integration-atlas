@@ -16,6 +16,12 @@ problems; choose the next release scope only when evidence supports it.
 
 ## Recent releases
 
+**v0.6.0** keeps the Northstar demo separate from people's own estates. First
+run offers a choice between the demo and a scan, scans go into named
+workspaces, the sidebar switches workspaces, and a demo reset keeps any scan
+results it finds in a separate workspace instead of deleting them. See the
+[v0.6.0 specification](tasks/v0.6.0-spec.md).
+
 **v0.5.1** clarifies local versus server collection privileges and adds Windows
 and Linux collectors for scheduler definitions and supported source/config
 files from explicit roots.
@@ -30,8 +36,9 @@ and zoom and fit controls perform their labelled actions. See the
 These are options to revisit for later releases. Select only the highest-impact
 problem when planning each release.
 
-- Make navigation, errors, refresh, and workspace changes predictable.
-- Distinguish the Northstar demo from a real workspace during first run.
+- Make navigation, errors, and refresh predictable after edits, reviews, and
+  scans.
+- Rename, delete, or merge workspaces once people use several of them.
 - Improve focused graph views, layout, keyboard access, and shareable results.
 - Align API contracts and help contributors follow a discovery when real drift
   or maintenance friction appears.

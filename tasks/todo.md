@@ -95,3 +95,16 @@
       handling of sensitive bundle contents.
 - [x] Add v0.5.1 release notes and bump version metadata.
 - [x] Full release checks, review, CI, release and Pages verification
+
+## v0.6.0 — Separate workspaces from the demo
+
+- [x] Reserve the demo workspace: refuse scans into it and regular workspaces
+      that take its name; let previews name a new workspace without creating it.
+- [x] Report demo reset effects and keep non-demo data in a separate workspace
+      instead of deleting it, for the API, the deprecated route and `atlas demo`.
+- [x] First-run choice, scan target workspace, sidebar switcher with a
+      remembered choice, remount on switch, and a startup error screen.
+- [x] CLI names fallback workspaces and resolves `scan run --workspace` by id
+      or slug.
+- [x] Spec, ADR, docs, release notes and version 0.6.0.
+- [ ] Full release checks, review, CI, release and Pages verification

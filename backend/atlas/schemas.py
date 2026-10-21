@@ -318,9 +318,40 @@ class WorkspaceOut(ORMModel):
 
 
 class WorkspaceCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=200)
     description: str = ""
     is_demo: bool = False
+
+
+class DemoStatusOut(BaseModel):
+    workspace: WorkspaceOut | None = None
+    demo_entities: int
+    demo_relationships: int
+    edited_entities: int = 0
+    reviewed_relationships: int = 0
+    scans: int = 0
+    other_entities: int = 0
+    other_relationships: int = 0
+    has_other_data: bool = False
+    #: Name the current demo workspace would be kept under by a reset.
+    kept_workspace_name: str | None = None
+
+
+class DemoResetOut(BaseModel):
+    status: str
+    workspace_id: str
+    kept_workspace_id: str | None = None
+    kept_workspace_name: str | None = None
+    entities_added: int = 0
+    entities_updated: int = 0
+    entities_removed: int = 0
+    relationships_added: int = 0
+    relationships_updated: int = 0
+    relationships_removed: int = 0
+    evidence_added: int = 0
+    secrets_redacted: int = 0
+    risks_found: int = 0
+    unchanged: int = 0
 
 
 class OverviewOut(BaseModel):
@@ -371,6 +402,10 @@ class ScanProgress(BaseModel):
 class ScanPreview(BaseModel):
     scanner_summary: dict[str, Any]
     diff_summary: dict[str, Any]
+    #: The workspace the scan would write to. ``creates_workspace`` means
+    #: applying the scan creates it; the preview itself never does.
+    workspace_name: str = ""
+    creates_workspace: bool = False
 
 
 class ScanCheckpointOut(BaseModel):

@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { HistoryCompare } from "@/components/panels/HistoryCompare";
-import type { ScanDiff, ScanPreview, ScanProgress } from "@/lib/types";
+import type { ScanDiff, ScanPreview, ScanProgress, Workspace } from "@/lib/types";
 import { cn, formatNumber, relativeTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,25 +19,45 @@ import { Input, Label } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState, Stat, Skeleton } from "@/components/ui/misc";
 
+const NEW_WORKSPACE = "__new__";
+
 export function ScansPage({
+  workspaces,
   workspaceId,
+  recentScan,
   onScanComplete,
 }: {
+  workspaces: Workspace[];
   workspaceId: string | null;
-  onScanComplete: () => void;
+  /** The scan just applied, kept across the switch to the workspace it wrote to. */
+  recentScan: ScanProgress | null;
+  onScanComplete: (result: ScanProgress) => void;
 }) {
+  const recent = recentScan?.scan.workspace_id === workspaceId ? recentScan : null;
+  const ownWorkspaces = workspaces.filter((w) => !w.is_demo);
+  const active = workspaces.find((w) => w.id === workspaceId) ?? null;
   const [scans, setScans] = useState<ScanProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [rootPath, setRootPath] = useState("");
+  // Scans never target the demo; while it is active, default to a new workspace.
+  const [target, setTarget] = useState(active && !active.is_demo ? active.id : NEW_WORKSPACE);
+  const [newName, setNewName] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastResult, setLastResult] = useState<ScanProgress | null>(null);
+  const [lastResult, setLastResult] = useState<ScanProgress | null>(recent);
   const [preview, setPreview] = useState<ScanPreview | null>(null);
+  const [previewKey, setPreviewKey] = useState("");
   const [previewPath, setPreviewPath] = useState("");
-  const [selectedScan, setSelectedScan] = useState<string | null>(null);
+  const [selectedScan, setSelectedScan] = useState<string | null>(recent?.scan.id ?? null);
+  // A preview stays valid only for the folder and destination it was made for.
+  const currentKey = `${rootPath.trim()}|${target}|${newName.trim()}`;
 
   const load = () => {
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      setScans([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     api.scans
       .list(workspaceId)
@@ -49,29 +69,37 @@ export function ScansPage({
   useEffect(load, [workspaceId]);
 
   const previewScan = () => {
-    if (!rootPath.trim() || !workspaceId) return;
+    if (!rootPath.trim()) return;
+    const key = currentKey;
     setRunning(true);
     setError(null);
     setPreview(null);
     setLastResult(null);
-    api.scans.preview({ root_path: rootPath.trim(), workspace_id: workspaceId })
-      .then((result) => { setPreview(result); setPreviewPath(rootPath.trim()); })
+    const destination = target === NEW_WORKSPACE
+      ? { workspace_name: newName.trim() || undefined }
+      : { workspace_id: target };
+    api.scans.preview({ root_path: rootPath.trim(), ...destination })
+      .then((result) => { setPreview(result); setPreviewPath(rootPath.trim()); setPreviewKey(key); })
       .catch((err: Error) => setError(err.message))
       .finally(() => setRunning(false));
   };
 
   const runScan = () => {
-    if (!preview || !workspaceId) return;
+    if (!preview) return;
     setRunning(true);
     setError(null);
+    // Apply to the workspace the preview resolved; a blank name became the folder name.
+    const destination = target === NEW_WORKSPACE
+      ? { workspace_name: preview.workspace_name }
+      : { workspace_id: target };
     api.scans
-      .run({ root_path: previewPath, workspace_id: workspaceId })
+      .run({ root_path: previewPath, ...destination })
       .then((result) => {
         setLastResult(result);
         setPreview(null);
         setSelectedScan(result.scan.id);
         load();
-        onScanComplete();
+        onScanComplete(result);
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setRunning(false));
@@ -110,7 +138,7 @@ export function ScansPage({
                   onKeyDown={(e) => e.key === "Enter" && previewScan()}
                 />
               </div>
-              <Button variant="default" size="md" onClick={previewScan} disabled={!rootPath.trim() || !workspaceId || running}>
+              <Button variant="default" size="md" onClick={previewScan} disabled={!rootPath.trim() || running}>
                 {running ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> Scanning…
@@ -122,12 +150,51 @@ export function ScansPage({
                 )}
               </Button>
             </div>
-            {preview && rootPath.trim() === previewPath && (
+            <div className="mt-3 flex flex-wrap items-end gap-2.5">
+              <div className="w-full sm:w-[280px]">
+                <Label htmlFor="scan-target">Scan into</Label>
+                <select
+                  id="scan-target"
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  className="mt-1 h-8 w-full rounded-[5px] border border-line-strong bg-surface-2 px-2 text-[12.5px] text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/40"
+                >
+                  {ownWorkspaces.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                  <option value={NEW_WORKSPACE}>New workspace…</option>
+                </select>
+              </div>
+              {target === NEW_WORKSPACE && (
+                <div className="min-w-[220px] flex-1">
+                  <Label htmlFor="scan-new-workspace">New workspace name</Label>
+                  <Input
+                    id="scan-new-workspace"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Defaults to the folder name"
+                    className="mt-1"
+                    onKeyDown={(e) => e.key === "Enter" && previewScan()}
+                  />
+                </div>
+              )}
+            </div>
+            {active?.is_demo && (
+              <p className="mt-2 text-[11px] text-muted">
+                {active.name} is the demo workspace and keeps only its sample data, so scans go
+                into a workspace of your own.
+              </p>
+            )}
+            {preview && currentKey === previewKey && (
               <div className="mt-3 rounded-[7px] border border-accent/30 bg-surface-2 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="text-[12px] font-semibold text-ink">Proposed changes</div>
-                    <p className="mt-0.5 text-[11px] text-muted">Preview leaves the workspace unchanged. Apply scans current files again.</p>
+                    <p className="mt-0.5 text-[11px] text-muted">
+                      Into <span className="text-ink">{preview.workspace_name}</span>
+                      {preview.creates_workspace ? ", a new workspace created when you apply" : ""}.
+                      Preview changes nothing; Apply scans the current files again.
+                    </p>
                   </div>
                   <Button size="sm" onClick={runScan} disabled={running}>
                     <Play className="h-3.5 w-3.5" /> Apply scan
@@ -177,11 +244,14 @@ export function ScansPage({
           </CardContent>
         </Card>
 
-        {!loading && <HistoryCompare workspaceId={workspaceId} scans={scans} />}
+        {!loading && workspaceId && <HistoryCompare workspaceId={workspaceId} scans={scans} />}
 
         <div className="mt-6">
           <div className="flex items-center gap-2">
-            <h2 className="text-[13px] font-semibold text-ink">Scan history</h2>
+            <h2 className="text-[13px] font-semibold text-ink">
+              Scan history
+              {active && <span className="font-normal text-muted"> · {active.name}</span>}
+            </h2>
             <Button variant="ghost" size="xs" onClick={load}>
               <RefreshCw className="h-3 w-3" /> Refresh
             </Button>
