@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Download,
   Filter,
@@ -43,6 +44,7 @@ type SidePanel =
   | null;
 
 export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; risks: RiskFinding[] }) {
+  const navigate = useNavigate();
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -561,10 +563,10 @@ export function AtlasPage({ workspaceId, risks }: { workspaceId: string | null; 
                 title={Object.keys(facets.entity_type).length ? "No entities match these filters" : "Nothing discovered yet"}
                 description={Object.keys(facets.entity_type).length
                   ? "Try clearing filters or widening your search."
-                  : "Load the Northstar demo or run a scan to populate the atlas."}
+                  : "This workspace has no discoveries yet. Scan a folder into it to populate the atlas."}
                 action={Object.keys(facets.entity_type).length
                   ? <Button variant="outline" size="sm" onClick={clearFilters}>Clear all filters</Button>
-                  : <Button variant="default" size="sm" onClick={() => api.workspaces.seedDemo().then(loadGraph)}>Load demo estate</Button>}
+                  : <Button variant="default" size="sm" onClick={() => navigate("/scans")}>Open Scans</Button>}
               />
             </div>
           ) : (

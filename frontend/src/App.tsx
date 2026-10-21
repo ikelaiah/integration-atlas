@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
-import type { EntityType, RiskFinding, Workspace } from "@/lib/types";
+import { pickWorkspace, readStoredWorkspace, storeWorkspace } from "@/lib/workspace-choice";
+import type { EntityType, RiskFinding, ScanProgress, Workspace } from "@/lib/types";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { CommandPalette } from "@/components/layout/CommandPalette";
@@ -12,7 +13,9 @@ import { RisksPage } from "@/features/risks/RisksPage";
 import { ScansPage } from "@/features/scans/ScansPage";
 import { ReviewPage } from "@/features/review/ReviewPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
+import { FirstRunPage, StartupError } from "@/features/onboarding/FirstRunPage";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { X } from "lucide-react";
 
 const SYSTEM_TYPES: EntityType[] = ["system", "application", "external_service", "server"];
 const INTEGRATION_TYPES: EntityType[] = [
@@ -34,7 +37,10 @@ const DATA_TYPES: EntityType[] = [
   "sftp_location",
 ];
 
+type BootState = { kind: "loading" } | { kind: "ready" } | { kind: "error"; message: string };
+
 export default function App() {
+  const [boot, setBoot] = useState<BootState>({ kind: "loading" });
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [risks, setRisks] = useState<RiskFinding[]>([]);
@@ -42,22 +48,24 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
+  // Survive the remount that follows a switch to the workspace a scan created.
+  const [recentScan, setRecentScan] = useState<ScanProgress | null>(null);
+  const [dataVersion, setDataVersion] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // ------------------------------------------------------------------ //
   // bootstrap
   // ------------------------------------------------------------------ //
-  const bootstrap = useCallback(async () => {
+  // An empty database stays empty until the person chooses the demo or a scan.
+  const bootstrap = useCallback(async (preferred?: string) => {
     try {
-      let list = await api.workspaces.list();
-      if (list.length === 0) {
-        await api.workspaces.seedDemo();
-        list = await api.workspaces.list();
-      }
+      const list = await api.workspaces.list();
       setWorkspaces(list);
-      setWorkspaceId((current) => current ?? list[0]?.id ?? null);
-    } catch {
-      setWorkspaces([]);
+      setWorkspaceId((current) => pickWorkspace(list, preferred ?? current ?? readStoredWorkspace()));
+      setBoot({ kind: "ready" });
+    } catch (err) {
+      setBoot({ kind: "error", message: err instanceof Error ? err.message : String(err) });
     }
   }, []);
 
@@ -66,6 +74,18 @@ export default function App() {
   }, [bootstrap]);
 
   useEffect(() => {
+    if (boot.kind === "ready") storeWorkspace(workspaceId);
+  }, [boot.kind, workspaceId]);
+
+  const selectWorkspace = useCallback((id: string) => {
+    setSelectedName(null);
+    setRecentScan(null);
+    setNotice(null);
+    setWorkspaceId(id);
+  }, []);
+
+  useEffect(() => {
+    setRisks([]);
     if (!workspaceId) return;
     let cancelled = false;
     setRisksLoading(true);
@@ -84,7 +104,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [workspaceId]);
+  }, [workspaceId, dataVersion]);
 
   // ------------------------------------------------------------------ //
   // global shortcuts
@@ -118,7 +138,7 @@ export default function App() {
   }, []);
 
   const workspaceName = useMemo(
-    () => workspaces.find((w) => w.id === workspaceId)?.name ?? "—",
+    () => workspaces.find((w) => w.id === workspaceId)?.name ?? "None yet",
     [workspaces, workspaceId],
   );
   const isDemo = useMemo(
@@ -136,6 +156,21 @@ export default function App() {
     [navigate],
   );
 
+  if (boot.kind === "loading") {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-canvas text-[12px] text-subtle">
+        Loading Atlas…
+      </div>
+    );
+  }
+  if (boot.kind === "error") {
+    return <StartupError message={boot.message} onRetry={() => bootstrap()} />;
+  }
+
+  // Pages that show one workspace's data need a workspace; offer the first-run choice instead.
+  const needsWorkspace = (page: ReactNode) =>
+    workspaceId ? page : <FirstRunPage onDemoLoaded={(id) => bootstrap(id)} />;
+
   return (
     <TooltipProvider delayDuration={120}>
       <div className="flex h-screen w-screen overflow-hidden bg-canvas text-ink">
@@ -144,6 +179,9 @@ export default function App() {
           onToggle={() => setSidebarCollapsed((v) => !v)}
           workspaceName={workspaceName}
           isDemo={isDemo}
+          workspaces={workspaces}
+          workspaceId={workspaceId}
+          onSelectWorkspace={selectWorkspace}
         />
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -160,16 +198,26 @@ export default function App() {
             selectedName={selectedName}
           />
 
-          <main className="min-h-0 flex-1">
+          {/* Remount pages on a workspace switch so no selection, impact, path or
+              preview from the previous workspace survives. */}
+          {notice && (
+            <div role="status" className="flex items-center gap-2 border-b border-accent/30 bg-accent-soft px-4 py-2 text-[11.5px] text-ink">
+              <span className="flex-1">{notice}</span>
+              <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss notice" className="rounded-[4px] p-1 text-subtle hover:bg-surface-2 hover:text-ink">
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+          <main key={workspaceId ?? "none"} className="min-h-0 flex-1">
             <Routes>
-              <Route path="/" element={<OverviewPage workspaceId={workspaceId} />} />
+              <Route path="/" element={needsWorkspace(<OverviewPage workspaceId={workspaceId} />)} />
               <Route
                 path="/atlas"
-                element={<AtlasPage workspaceId={workspaceId} risks={risks} />}
+                element={needsWorkspace(<AtlasPage workspaceId={workspaceId} risks={risks} />)}
               />
               <Route
                 path="/systems"
-                element={
+                element={needsWorkspace(
                   <EntityListPage
                     workspaceId={workspaceId}
                     title="Systems & infrastructure"
@@ -178,11 +226,11 @@ export default function App() {
                     risks={risks}
                     onSelect={handleSelectEntity}
                   />
-                }
+                )}
               />
               <Route
                 path="/integrations"
-                element={
+                element={needsWorkspace(
                   <EntityListPage
                     workspaceId={workspaceId}
                     title="Integrations"
@@ -191,11 +239,11 @@ export default function App() {
                     risks={risks}
                     onSelect={handleSelectEntity}
                   />
-                }
+                )}
               />
               <Route
                 path="/data"
-                element={
+                element={needsWorkspace(
                   <EntityListPage
                     workspaceId={workspaceId}
                     title="Data"
@@ -204,11 +252,11 @@ export default function App() {
                     risks={risks}
                     onSelect={handleSelectEntity}
                   />
-                }
+                )}
               />
               <Route
                 path="/risks"
-                element={
+                element={needsWorkspace(
                   <RisksPage
                     risks={risks}
                     loading={risksLoading}
@@ -216,29 +264,42 @@ export default function App() {
                       handleSelectEntity(id);
                     }}
                   />
-                }
+                )}
               />
               <Route
                 path="/scans"
                 element={
                   <ScansPage
+                    workspaces={workspaces}
                     workspaceId={workspaceId}
-                    onScanComplete={() => {
-                      bootstrap();
-                      if (workspaceId) api.risks(workspaceId).then((result) => setRisks(result.findings));
+                    recentScan={recentScan}
+                    onScanComplete={(result) => {
+                      setRecentScan(result);
+                      setDataVersion((v) => v + 1);
+                      bootstrap(result.scan.workspace_id);
                     }}
                   />
                 }
               />
-              <Route path="/review" element={<ReviewPage workspaceId={workspaceId} />} />
+              <Route path="/review" element={needsWorkspace(<ReviewPage workspaceId={workspaceId} />)} />
               <Route
                 path="/settings"
                 element={
                   <SettingsPage
                     workspaces={workspaces}
                     workspaceId={workspaceId}
-                    onSelectWorkspace={setWorkspaceId}
-                    onReload={bootstrap}
+                    onSelectWorkspace={selectWorkspace}
+                    onReload={() => bootstrap()}
+                    onDemoReset={(result) => {
+                      setRecentScan(null);
+                      setDataVersion((v) => v + 1);
+                      setNotice(
+                        result.kept_workspace_name
+                          ? `The demo was reset. Scan results and other data found in it are kept in the workspace “${result.kept_workspace_name}”.`
+                          : "The Northstar demo is loaded with its original data.",
+                      );
+                      bootstrap(result.workspace_id);
+                    }}
                   />
                 }
               />

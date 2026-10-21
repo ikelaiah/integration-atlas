@@ -8,14 +8,18 @@ walkthrough, while the interactive app runs locally with `atlas serve`.
 ## Try the workflow
 
 1. From a checkout, install Atlas and build the web UI as shown in the
-   [quick start](../README.md#quick-start). Run `atlas demo` and `atlas serve`.
+   [quick start](../README.md#quick-start). Run `atlas serve`.
 2. Open **Scans** in the local app. Enter the absolute path to
-   `examples/northstar` and choose **Preview scan**. The preview lists a bounded
+   `examples/northstar`, keep **Scan into** set to **New workspace…**, name it
+   `Northstar example`, and choose **Preview scan**. The preview lists a bounded
    set of entities and relationships that would be added, updated or retired.
-   It does not change the workspace or create a scan history entry.
-3. Choose **Apply scan**. Atlas reads the files again and saves the resulting
-   diff in **Scan history**. If files changed since the preview, the applied
-   result can differ. Expand the history row to see what was saved.
+   It changes nothing: it does not create the workspace or a scan history
+   entry. Scans never go into the Northstar demo workspace, which holds only
+   sample data.
+3. Choose **Apply scan**. Atlas creates the workspace, reads the files again
+   and saves the resulting diff in **Scan history**, then switches to the new
+   workspace. If files changed since the preview, the applied result can
+   differ. Expand the history row to see what was saved.
 4. Open **Review**. Choose a proposed relationship to see its source, target,
    confidence and evidence snippets. Add an optional note and choose
    **Confirm** or **Reject**. A rejected relationship stays in review history

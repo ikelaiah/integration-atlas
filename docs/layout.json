@@ -100,6 +100,10 @@
         {
           "title": "Scan graph checkpoints",
           "path": "adr/009-scan-graph-checkpoints.md"
+        },
+        {
+          "title": "Reserved demo workspace",
+          "path": "adr/010-reserved-demo-workspace.md"
         }
       ]
     }

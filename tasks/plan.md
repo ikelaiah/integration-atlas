@@ -191,3 +191,14 @@ See [the v0.5.0 specification](v0.5.0-spec.md). Ship in three slices:
    zoom out, Fit, and Reset perform their labelled actions.
 3. Document the interaction, bump version metadata, check the frontend build,
    review, then complete full release checks before publishing v0.5.0.
+
+## v0.6.0 — Separate Workspaces from the Demo
+
+See [the v0.6.0 specification](v0.6.0-spec.md). Ship in three slices:
+
+1. Backend: reserve the demo workspace for scans and names, add demo status
+   and a non-destructive reset, and route the CLI through the same rules.
+2. Frontend: first-run choice, scan target workspace, sidebar switcher with a
+   remembered choice, remount on switch, reset confirmation and startup error.
+3. Document the behavior, bump version metadata, verify backend, frontend and
+   browser flows, then merge after CI and verify the release and Pages.

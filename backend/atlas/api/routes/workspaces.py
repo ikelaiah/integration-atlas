@@ -7,7 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from atlas.db import get_db
-from atlas.demo.seeder import get_or_create_workspace, run_risk_analysis, seed_northstar_demo
+from atlas.demo.seeder import (
+    get_or_create_workspace,
+    run_risk_analysis,
+    seed_northstar_demo,
+    slugify,
+)
 from atlas.domain import EntityType
 from atlas.models import Entity, Relationship, Workspace
 from atlas.schemas import OverviewOut, WorkspaceCreate, WorkspaceOut
@@ -24,8 +29,19 @@ def list_workspaces(db: Session = Depends(get_db)) -> list[Workspace]:
 
 @router.post("", response_model=WorkspaceOut)
 def create_workspace(payload: WorkspaceCreate, db: Session = Depends(get_db)) -> Workspace:
+    """Create a workspace, or return the existing workspace with the same name."""
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Workspace name is required")
+    existing = db.scalar(select(Workspace).where(Workspace.slug == slugify(name)))
+    if existing is not None and existing.is_demo != payload.is_demo:
+        owner = "the demo workspace" if existing.is_demo else "a workspace that is not a demo"
+        raise HTTPException(
+            status_code=409,
+            detail=f"The name {name!r} belongs to {owner}. Choose another name.",
+        )
     return get_or_create_workspace(
-        db, payload.name, description=payload.description, is_demo=payload.is_demo
+        db, name, description=payload.description, is_demo=payload.is_demo
     )
 
 
@@ -149,8 +165,9 @@ def _build_highlights(entities, relationships, drafts, index: GraphIndex) -> lis
     return lines[:8]
 
 
-@router.post("/{workspace_id}/seed-demo", response_model=dict)
+@router.post("/{workspace_id}/seed-demo", response_model=dict, deprecated=True)
 def seed_demo(workspace_id: str | None = None, db: Session = Depends(get_db)) -> dict:
+    """Deprecated alias of ``POST /api/demo/reset``; ``workspace_id`` is ignored."""
     result = seed_northstar_demo(db, replace=True)
     db.commit()
     return {"status": "seeded", **result.as_dict()}

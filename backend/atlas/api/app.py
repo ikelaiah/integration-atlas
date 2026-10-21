@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from atlas import __version__
-from atlas.api.routes import entities, graph, review, risks, scans, workspaces
+from atlas.api.routes import demo, entities, graph, review, risks, scans, workspaces
 from atlas.config import get_settings
 from atlas.db import init_db
 
@@ -45,6 +45,7 @@ def create_app(*, initialise_db: bool = True) -> FastAPI:
     )
 
     app.include_router(workspaces.router)
+    app.include_router(demo.router)
     app.include_router(entities.router)
     app.include_router(graph.router)
     app.include_router(risks.router)

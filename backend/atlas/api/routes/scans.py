@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from atlas.config import get_settings
 from atlas.db import get_db
-from atlas.demo.seeder import get_or_create_workspace, run_risk_analysis
+from atlas.demo.seeder import DemoWorkspaceError, resolve_scan_workspace, run_risk_analysis
 from atlas.domain import ScanStatus
 from atlas.models import Scan, ScanSnapshot, Workspace
 from atlas.schemas import (
@@ -149,24 +149,30 @@ def _validated_root(payload: ScanCreate) -> Path:
 
 @router.post("/preview", response_model=ScanPreview)
 def preview_scan(payload: ScanCreate, db: Session = Depends(get_db)) -> ScanPreview:
-    if not payload.workspace_id:
-        raise HTTPException(status_code=400, detail="Preview requires an existing workspace_id")
     root = _validated_root(payload)
-    workspace = db.get(Workspace, payload.workspace_id)
-    if workspace is None:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-    before = snapshot(db, workspace.id)
     from atlas.scanners.runner import run_scan as run_discovery
 
+    # A new workspace named by the preview is created inside the savepoint, so
+    # an abandoned preview leaves no empty workspace behind.
+    existing_ids = set(db.scalars(select(Workspace.id)))
     savepoint = db.begin_nested()
     try:
+        workspace = _scan_workspace(db, payload, root)
+        workspace_name = workspace.name
+        creates_workspace = workspace.id not in existing_ids
+        before = snapshot(db, workspace.id)
         summary = run_discovery(db, workspace, root)
         after = snapshot(db, workspace.id)
         diff = compare(before, after)
     finally:
         savepoint.rollback()
         db.expire_all()
-    return ScanPreview(scanner_summary=summary, diff_summary=diff)
+    return ScanPreview(
+        scanner_summary=summary,
+        diff_summary=diff,
+        workspace_name=workspace_name,
+        creates_workspace=creates_workspace,
+    )
 
 
 @router.post("", response_model=ScanProgress, status_code=201)
@@ -175,16 +181,7 @@ def run_scan(payload: ScanCreate, db: Session = Depends(get_db)) -> ScanProgress
         raise HTTPException(status_code=400, detail="Use /api/scans/preview for a dry run")
     root = _validated_root(payload)
 
-    if payload.workspace_id:
-        workspace = db.get(Workspace, payload.workspace_id)
-        if workspace is None:
-            raise HTTPException(status_code=404, detail="Workspace not found")
-    else:
-        workspace = get_or_create_workspace(
-            db,
-            payload.workspace_name or root.name,
-            description=f"Discovered from {root}",
-        )
+    workspace = _scan_workspace(db, payload, root)
 
     before = snapshot(db, workspace.id)
     scan = Scan(
@@ -228,6 +225,21 @@ def run_scan(payload: ScanCreate, db: Session = Depends(get_db)) -> ScanProgress
         db.flush()
 
     return _progress(scan)
+
+
+def _scan_workspace(db: Session, payload: ScanCreate, root: Path) -> Workspace:
+    try:
+        return resolve_scan_workspace(
+            db,
+            workspace_id=payload.workspace_id,
+            workspace_name=payload.workspace_name,
+            default_name=root.name,
+            description=f"Discovered from {root}",
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Workspace not found") from exc
+    except DemoWorkspaceError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 def _progress(scan: Scan) -> ScanProgress:

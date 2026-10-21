@@ -1,6 +1,8 @@
 /** Thin typed client for the Integration Atlas API. */
 
 import type {
+  DemoReset,
+  DemoStatus,
   EntityDetail,
   GraphResponse,
   GraphComparison,
@@ -62,11 +64,12 @@ export const api = {
   workspaces: {
     list: () => request<Workspace[]>("/api/workspaces"),
     overview: (id: string) => request<Overview>(`/api/workspaces/${id}/overview`),
-    seedDemo: (id = "demo") =>
-      request<{ status: string; entities_added: number; relationships_added: number }>(
-        `/api/workspaces/${id}/seed-demo`,
-        { method: "POST" },
-      ),
+  },
+
+  demo: {
+    status: () => request<DemoStatus>("/api/demo"),
+    /** Load or restore Northstar; data from elsewhere is kept, never deleted. */
+    reset: () => request<DemoReset>("/api/demo/reset", { method: "POST" }),
   },
 
   graph: (workspaceId: string, params: { entity_type?: string[]; min_confidence?: string; environment?: Environment[]; relationship_type?: RelationshipType[]; review_status?: ReviewStatus[]; q?: string; limit?: number } = {}) =>
@@ -144,7 +147,7 @@ export const api = {
       offset?: number;
       limit?: number;
     }) => request<GraphComparison>(`/api/scans/compare${qs(params)}`),
-    preview: (payload: { root_path: string; workspace_id: string }) =>
+    preview: (payload: { root_path: string; workspace_id?: string; workspace_name?: string }) =>
       request<ScanPreview>("/api/scans/preview", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       }),

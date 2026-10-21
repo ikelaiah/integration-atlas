@@ -19,8 +19,8 @@ capture; they do not copy evidence, snippets, source paths or metadata.
    relationship, action, or name. **Load more changes** pages through the
    complete result when the initial list is bounded.
 
-For a concrete example, scan `examples/northstar`, edit a copy of one input
-file, and scan the same folder again. Choose **After** for the first scan and
+For a concrete example, scan a copy of `examples/northstar` into a workspace
+of your own, edit one input file in the copy, and scan the same folder again. Choose **After** for the first scan and
 **After** for the second to inspect the net graph change. Atlas compares saved
 states: a row added and then retired between the chosen points does not appear
 as a net change. The individual scan diff remains available in **Scan history**.
@@ -31,8 +31,8 @@ Checkpoints begin with scans applied on v0.4.0 or later, through either the web
 app or CLI. Earlier scans retain their original per-scan diff, but Atlas cannot
 rebuild their full historical graph from that bounded list. A fresh applied
 scan captures its own before and after states, including the graph that existed
-before upgrading. Seeding the demo does not create a scan checkpoint; scanning
-the Northstar example does.
+before upgrading. Loading the demo does not create a scan checkpoint; scanning
+the Northstar example files into your own workspace does.
 
 An entity edited or a relationship reviewed between scans appears in the
 **Before** checkpoint of the next scan. The current Atlas graph continues to

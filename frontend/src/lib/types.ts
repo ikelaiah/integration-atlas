@@ -286,6 +286,31 @@ export interface ScanDiff {
 export interface ScanPreview {
   scanner_summary: Record<string, unknown>;
   diff_summary: ScanDiff;
+  /** Workspace the scan would write to; `creates_workspace` means applying creates it. */
+  workspace_name: string;
+  creates_workspace: boolean;
+}
+
+export interface DemoStatus {
+  workspace: Workspace | null;
+  demo_entities: number;
+  demo_relationships: number;
+  edited_entities: number;
+  reviewed_relationships: number;
+  scans: number;
+  other_entities: number;
+  other_relationships: number;
+  has_other_data: boolean;
+  kept_workspace_name: string | null;
+}
+
+export interface DemoReset {
+  status: string;
+  workspace_id: string;
+  kept_workspace_id: string | null;
+  kept_workspace_name: string | null;
+  entities_added: number;
+  relationships_added: number;
 }
 
 export type CheckpointPhase = "before" | "after";
